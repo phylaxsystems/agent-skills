@@ -52,3 +52,13 @@ Use this checklist to map invariants for pool/lending protocols without anchorin
 ## Token Transfer Safety
 - Transfer/transferFrom of deposit tokens must not make sender unhealthy.
 - Exclude zero-amount transfers and self-transfers from HF checks.
+
+## Timelock and Governance Queue
+- Timelocked config changes require a prior submit and are not executable before `executableAt`.
+- Timelock executions clear `executableAt` (no reuse).
+- Revokes clear pending actions; submit rejects duplicate pending data.
+
+## Vault Caps and Allowances
+- Cap setters are monotonic (increase-only or decrease-only) and bounded by protocol max (e.g., relative cap <= 1e18).
+- Allowance deltas match token flows (withdraw/redeem/transferFrom reduce allowance unless unlimited).
+- Permit increments nonce by 1 and sets allowance to signed value.

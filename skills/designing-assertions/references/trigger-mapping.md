@@ -8,6 +8,7 @@
 
 ## Call Trigger Tips
 - Prefer `registerCallTrigger(fn, selector)` over `registerCallTrigger(fn)`.
+- `registerCallTrigger(fn)` fires on any call to the adopter; use only when a chokepoint truly captures everything.
 - Parse inputs with `getCallInputs` to extract accounts or amounts.
 - For proxies, use `getDelegateCallInputs` if you only want delegate calls.
 - Internal Solidity calls are not traced; register on external entrypoints.
@@ -18,6 +19,7 @@
 
 ## Storage Trigger Tips
 - Use specific slot offsets to avoid global triggers.
+- `registerStorageChangeTrigger(fn)` fires on any slot change; avoid unless you need global storage coverage.
 - For mappings, compute slot = keccak256(key, baseSlot) + offset.
 - For packed fields, mask or shift bits after `ph.load`.
 

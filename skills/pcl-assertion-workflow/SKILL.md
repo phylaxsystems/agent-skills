@@ -18,13 +18,18 @@ Use this when you need the full lifecycle: create, test, store, submit, and depl
 - You only need test patterns and fuzzing. Use `testing-assertions`.
 
 ## Quick Start
-1. Initialize or clone a project (e.g., `credible-layer-starter`).
-2. Run `FOUNDRY_PROFILE=assertions pcl test` to validate locally.
-3. Deploy target contracts with `forge script`.
-4. Authenticate: `pcl auth login`.
-5. Store assertions: `pcl store <AssertionName>`.
-6. Submit: `pcl submit` (or `pcl submit -a <AssertionName> -p <ProjectName>`).
-7. Deploy via dApp and wait for timelock.
+1. From the protocol repo root, keep the standard Foundry layout: `src/`, `test/`, `assertions/src/`, `assertions/test/`.
+2. Configure a dedicated Foundry profile (e.g., `[profile.assertions]`) pointing `src` and `test` to the assertions paths, and add remappings for `credible-std` and `forge-std`. Consider separate `out`/`cache_path` to avoid collisions.
+2. Initialize or clone a project (e.g., `credible-layer-starter`).
+3. Run `FOUNDRY_PROFILE=assertions pcl test` to validate locally. <u>Use `pcl test` for assertion tests because it includes the `cl.addAssertion` cheatcode; use `forge test` only for regular protocol tests.</u>
+4. Deploy target contracts with `forge script`.
+5. Authenticate: `pcl auth login`.
+6. Store assertions: `pcl store <AssertionName> [ctor args...]` (auto-builds; `pcl build` is optional).
+7. Submit: `pcl submit` (or `pcl submit -a 'AssertionName(arg1,arg2)' -p <ProjectName>`; project name is case-sensitive).
+8. Deploy via dApp (staging or production) and wait for timelock.
+
+## Environment Overrides
+- `PCL_AUTH_URL`, `PCL_DA_URL`, `PCL_API_URL` for custom endpoints.
 
 ## Rationalizations to Reject
 - "Tests can wait until after deployment." Always run `pcl test` first.

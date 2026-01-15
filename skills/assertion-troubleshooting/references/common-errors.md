@@ -5,6 +5,8 @@
 - Fix: Move setup before `cl.assertion()` and call the target function next.
 - Cause: trigger selector does not match the target function.
 - Fix: verify the `triggers()` registration and selector.
+- Cause: internal calls are not traced.
+- Fix: register triggers on external entrypoints (or `this.` calls).
 
 ## OutOfGas
 - Cause: assertion exceeds 300k gas limit.
@@ -22,6 +24,10 @@
 - Cause: `getAllCallInputs()` includes proxy + delegate calls.
 - Fix: use `getCallInputs()` or `getDelegateCallInputs()`.
 
+## Call Input Decode Reverts
+- Cause: `CallInputs.input` excludes the selector; decoding with a selector offset reverts.
+- Fix: decode args directly; if you need `msg.data`, rebuild with `abi.encodePacked(selector, input)`.
+
 ## Internal Calls Not Traced
 - Cause: internal Solidity calls are not traced.
 - Fix: register triggers on external entrypoints.
@@ -37,6 +43,18 @@
 ## Constructor Cheatcodes
 - Cause: cheatcodes are unavailable in constructors.
 - Fix: move logic into assertion functions.
+
+## Backtesting FFI
+- Cause: missing `--ffi` or `ffi = true` in the backtest profile.
+- Fix: run `pcl test --ffi` or enable `ffi` in `foundry.toml`.
+
+## CreateContractSizeLimit
+- Cause: assertion contract bytecode exceeds the create size limit.
+- Fix: split assertions across multiple smaller contracts and re-run `pcl test`.
+
+## trace_filter Not Supported
+- Cause: RPC provider lacks `trace_filter` support.
+- Fix: set `useTraceFilter = false` (block scanning) or switch RPC providers.
 
 ## Wrong Profile
 - Cause: `pcl test` uses the default Foundry profile.

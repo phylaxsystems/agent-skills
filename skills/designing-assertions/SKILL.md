@@ -24,11 +24,12 @@ Design high-signal invariants and map them to precise triggers before writing an
 3. Express invariants as pre/post comparisons or event-accounting rules.
 4. Select data sources (state, logs, call inputs, storage slots).
 5. Choose minimal triggers that cover all violating paths.
+6. Decide whether the invariant needs call-frame checks (`forkPreCall`/`forkPostCall`) or only tx-level checks.
 
 ## Workflow
 - Build a protocol map: key contracts, roles, assets, mutable state.
 - Draft invariants in plain language and math form.
-- Identify legitimate exceptions in specs/audits and encode them explicitly.
+- Identify legitimate exceptions in specs/audits and encode them explicitly (events/logs are often the signal).
 - Decide if the invariant is transaction-scoped (pre/post) or call-scoped (per call id).
 - Choose enforcement location (per-contract vs chokepoint) based on call routing.
 - Flag upgradeability/proxy entrypoints and token integration assumptions.
@@ -37,6 +38,8 @@ Design high-signal invariants and map them to precise triggers before writing an
   - Event-based accounting when internal state is opaque.
   - Call input parsing for authorization or parameter bounds.
 - Map to triggers with the smallest blast radius.
+- For calldata-keyed invariants (timelock queues, executableAt[msg.data]), plan how to rebuild calldata from selector + args.
+- Group invariants into multiple assertion contracts when needed to avoid `CreateContractSizeLimit`.
 - Enumerate edge cases (zero supply, empty vaults, proxy upgrades, nested batches).
 
 ## Rationalizations to Reject

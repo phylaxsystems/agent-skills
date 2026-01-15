@@ -19,11 +19,15 @@ Use this when assertions fail unexpectedly, revert with OutOfGas, or never execu
 
 ## Quick Start
 1. Confirm trigger selector matches the target function.
-2. Ensure `cl.assertion()` is immediately before the target call.
+2. Ensure `cl.assertion()` is immediately before the target call; the next external call consumes it.
 3. Check if the target call reverted before assertions ran.
-4. Verify cheatcodes are used in assertion functions, not constructors.
-5. Use `pcl test -vvv` for traces and gas diagnostics.
-6. Confirm `FOUNDRY_PROFILE=assertions` when running `pcl test`.
+4. Verify cheatcodes are used in assertion functions, not constructors (`ph.load`, not `vm.load`).
+5. Remember internal Solidity calls are not traced; triggers only fire on external entrypoints.
+6. Use `pcl test -vvv` for traces and gas diagnostics.
+7. Confirm `FOUNDRY_PROFILE=assertions` when running `pcl test`.
+8. <u>Use `pcl test` for assertion tests because it includes the `cl.addAssertion` cheatcode; use `forge test` only for regular protocol tests.</u>
+9. If the failure is `CreateContractSizeLimit`, split assertions into smaller contracts.
+10. If the failure is an empty revert or ABI decode panic, re-check call input decoding (call inputs exclude selectors).
 
 ## Rationalizations to Reject
 - "The assertion should have run." Verify triggers and call order first.

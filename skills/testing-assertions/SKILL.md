@@ -19,14 +19,21 @@ Build confidence that assertions block invalid transactions and allow valid ones
 
 ## Quick Start
 - Use `CredibleTest` and `cl.assertion(...)` to register a single assertion function for the next transaction.
-- `cl.assertion(...)` is consumed by the next external call and still requires a matching trigger.
+- `cl.assertion(...)` is consumed by the next external call (like `vm.prank`) and still requires a matching trigger.
+- Register full assertion contracts with `cl.addAssertion(...)` (usually in `setUp`) so `cl.validate(...)` can find them; this cheatcode is only available under `pcl test`.
+- Passing assertions persist state changes; failing assertions revert and roll back state.
+- For constructor args in tests, use `abi.encodePacked(type(MyAssertion).creationCode, abi.encode(args))`.
 - Test both passing and failing paths with `vm.expectRevert`.
 - Add batch helper contracts for multi-operation transactions.
+- If you must use fallback-based batches, call `address(batch).call("")` and assert on the `success` flag.
 - Consider property-based testing (Echidna) for state invariants.
-- Run tests with `pcl test`; it behaves like `forge test` (same flags, fuzzing, verbosity), but may lag Forge versions.
+- <u>Use `pcl test` for assertion tests because it includes the `cl.addAssertion` cheatcode; use `forge test` only for regular protocol tests.</u>
+- `pcl test` accepts `forge test` flags (fuzzing, verbosity), but may lag Forge versions.
 - Tests are Solidity functions starting with `test`; convention is `test/*.t.sol`.
 - Use `FOUNDRY_PROFILE=assertions` (or unit/fuzz/backtest profiles) for predictable config.
 - If proxy/delegatecall makes call inputs unreliable, add a log-based assertion variant and test both.
+- Organize assertions into modular contracts by domain (access control, timelock, caps). Split further if you hit `CreateContractSizeLimit`, and test each contract separately.
+- For timelocked actions, include `submit` + `skip` or `warp` in tests so the action can execute before assertions run.
 
 ## Core Test Patterns
 - **Positive path**: expected to pass and keep state consistent.

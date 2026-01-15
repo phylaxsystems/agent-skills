@@ -44,8 +44,10 @@ contract MyBacktestingTest is CredibleTestWithBacktesting {
 
 ## Config Tips
 - `useTraceFilter = true` detects internal calls; requires RPC support.
+- If your provider does not support `trace_filter`, set `useTraceFilter = false` (block scanning).
 - `forkByTxHash = true` replays prior txs in the block for exact state (slow).
 - Use `blockRange = 1` with a known exploit block to validate detection.
+- For large ranges, prefer paid RPC endpoints to avoid rate limits.
 
 ## Foundry Profile Snippet
 ```toml

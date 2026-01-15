@@ -35,12 +35,14 @@ Start here before designing or implementing assertions. This skill defines the i
 - **Observation plan**: decide which values/events you will read to validate each invariant.
 - **Trigger plan**: select the narrowest trigger that guarantees coverage.
 - **Coverage check**: confirm each invariant is reachable from at least one trigger and entrypoint.
+- **Feasibility check**: internal calls are not traced; call inputs are ordered per selector; modified mapping keys must be derived from call inputs or logs; if an invariant depends on `msg.data`, plan to reconstruct it from selector + args because call inputs exclude the selector.
 
 ## Heuristics
 - Start with loss‑bearing invariants: solvency, accounting integrity, and upgrade control.
 - Prefer cross‑function invariants over per‑function reverts already in code.
 - If you cannot observe an invariant reliably, rephrase it to observable signals.
 - For lending protocols, classify actions by health‑factor impact and list allowed transitions.
+- If an invariant depends on intermediate call frames, plan to use `forkPreCall`/`forkPostCall` from the start.
 
 ## Deliverables
 - Invariant matrix (definition, source, exceptions, priority).

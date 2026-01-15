@@ -6,6 +6,7 @@
 - Only one assertion function can be registered at a time; test functions in isolation.
 - Put all setup before `cl.assertion()`; the very next call consumes it.
 - The next call must match a trigger registered for `fnSelector`, or the assertion will not execute.
+- Passing assertions persist state changes; failing assertions revert and roll back state.
 
 ## Profiles
 - Use `FOUNDRY_PROFILE=assertions` (or unit/fuzz/backtest profiles) to isolate assertion builds.
@@ -16,6 +17,7 @@
 ## Batch Operations
 - Use a helper contract that performs multiple operations in one call.
 - Avoid low-level fallback calls when possible; revert reasons are cleaner.
+- If you must use fallback, call `address(batch).call("")` and assert on the `success` flag.
 - Internal calls do not trigger assertions; register on external entrypoints.
 
 ## Time Windows and Modes
@@ -41,6 +43,7 @@
 ## Fuzzing
 - Fuzz amounts and sequence length to stress loops and rounding paths.
 - Include `vm.assume` guards to avoid invalid setups.
+- Consider a dedicated fuzz profile (e.g., `FOUNDRY_PROFILE=fuzz-assertions`) to keep local runs fast.
 
 ## Property-Based Testing
 - Use roundtrip properties for encode/decode pairs.
@@ -56,7 +59,8 @@
 - Use one backtest per assertion selector to isolate failures.
 
 ## PCL Test Parity
-- `pcl test` is a fork of `forge test` with identical behavior and flags.
+- `pcl test` is a fork of `forge test` with largely identical flags and behavior, but it adds `cl.addAssertion` for assertion tests.
+- Use `pcl test` for assertions and reserve `forge test` for regular protocol tests.
 - Use `forge-std/Test` for available helpers and cheatcodes.
 - Refer to the Forge Book for detailed cheatcode behavior and test flags.
 - Use `vm.expectRevert` for negative cases instead of `testFail` (deprecated in Foundry v1.0).

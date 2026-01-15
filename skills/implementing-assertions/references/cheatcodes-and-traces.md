@@ -35,6 +35,7 @@
 
 ## Triggers
 - `registerBalanceChangeTrigger` fires on ETH balance changes for the adopter.
+- `registerCallTrigger(fn)` and `registerStorageChangeTrigger(fn)` fire on any call/slot change; avoid unless you truly need global coverage.
 
 ## External Call Verification
 - To ensure a downstream call occurred (e.g., bridge send), query `getCallInputs` on the callee after `forkPostCall`.
@@ -43,6 +44,7 @@
 - Internal Solidity calls are not traced unless they are externalized via `this.`.
 - For nested batches, use `forkPreCall(id)` to detect whether you are inside a batch.
 - `getAssertionAdopter()` is only available in `triggers()` and assertion functions (not constructors).
+- Use `ph.load` in assertions; `vm.load` is unavailable.
 - Use `staticcall` to probe optional interfaces; skip checks when unsupported.
 - Enumerating modified mapping keys is not supported; derive keys from call inputs or logs.
 - For intra‑tx stability checks, use `forkPreTx()` as a baseline and `forkPostCall(id)` per call.

@@ -35,15 +35,18 @@ contract MyAssertion is Assertion {
 ```
 
 ## Implementation Checklist
-- **Triggers**: use the narrowest possible trigger; avoid global triggers.
+- **Triggers**: use the narrowest possible trigger; avoid global triggers (`registerCallTrigger(fn)` or `registerStorageChangeTrigger(fn)` without a selector/slot).
 - **Pre/Post**: call `forkPreTx()` only when needed; default is post-state.
 - **Call-Scoped Checks**: use `getCallInputs` + `forkPreCall`/`forkPostCall` for per-call invariants.
+- **Call Input Shape**: `CallInputs.input` contains args only (selector is stripped). Decode args directly; if you need `msg.data` (e.g., timelock keys), rebuild with `abi.encodePacked(selector, input)`.
 - **Preconditions**: use `before*` hook triggers or `forkPreCall` to assert pre-state requirements.
 - **Baselines**: for intra-tx stability, read `forkPreTx()` once and compare per-call post snapshots.
 - **Event Parsing**: filter by `emitter` and `topics[0]`; decode indexed vs data fields correctly.
-- **Storage Slots**: use `ph.load` for EIP-1967 slots, packed fields, and mappings.
+- **Storage Slots**: use `ph.load` (not `vm.load`) for EIP-1967 slots, packed fields, and mappings; derive slots via `forge inspect <Contract> storage-layout`.
 - **State Changes**: `getStateChanges*` includes the initial value at index 0; length 0 means no changes.
+- **Constructors**: cheatcodes are unavailable; prefer `ph.getAssertionAdopter()` inside assertion functions and pass only constants via constructor args if needed.
 - **Nested Calls**: avoid double counting; prefer `getCallInputs` to avoid proxy duplicates.
+- **Internal Calls**: internal Solidity calls are not traced; register on external entrypoints (or `this.` calls) when you need call inputs.
 - **Batch Dedupe**: deduplicate targets/accounts when a batch can repeat entries.
 - **Tolerances**: use minimal, documented tolerances for price/decimals rounding.
 - **Optional Interfaces**: use `staticcall` probing and skip when unsupported.
@@ -53,6 +56,7 @@ contract MyAssertion is Assertion {
 - **Id Mapping Guards**: if a packed id maps to `address(0)`, skip or fail early to avoid false positives.
 - **Sentinel Amounts**: normalize `max`/sentinel values (e.g., full repay/withdraw) using pre-state.
 - **Gas**: assertion gas cap is 300k; happy path is often most expensive; early return, cache reads, and limit loops.
+- **Size Limit**: organize assertions by domain (e.g., access control, timelock, accounting) and split if you hit `CreateContractSizeLimit`.
 
 ## Rationalizations to Reject
 - "Use getAllCallInputs everywhere." It can double-count proxy calls.
