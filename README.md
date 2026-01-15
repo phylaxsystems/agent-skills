@@ -55,7 +55,13 @@ Use when:
 
 ## Installation
 
-Copy the skill folders into your agent skills directory.
+The easiest option is the `npx` installer:
+
+```bash
+npx add-skill phylaxsystems/agent-skills
+```
+
+Manual install (copy the skill folders into your agent skills directory):
 
 ```bash
 # Claude Code
