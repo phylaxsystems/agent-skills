@@ -13,6 +13,7 @@ Design high-signal invariants and map them to precise triggers before writing an
 - Choosing between call, storage, or balance triggers.
 
 ## When NOT to Use
+- You need to discover invariants from scratch. Use `mapping-invariants`.
 - You only need cheatcode syntax or implementation details. Use `implementing-assertions`.
 - You only need test harness patterns. Use `testing-assertions`.
 - You are doing a general security review without writing assertions.

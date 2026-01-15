@@ -5,6 +5,14 @@ Skills follow the Agent Skills format.
 
 ## Available Skills
 
+### mapping-invariants
+Intro workflow for mapping invariants before writing assertions.
+
+Use when:
+- Starting a new protocol
+- Building the invariant matrix
+- Deciding the step‑by‑step plan
+
 ### designing-assertions
 Derive invariants and map them to precise triggers.
 
