@@ -30,6 +30,7 @@ Start here before designing or implementing assertions. This skill defines the i
 ## Workflow
 - **Protocol map**: read docs/specs/audits/tests; list contracts, assets, roles, and critical entrypoints.
 - **Invariant inventory**: express “states that must never occur” and rank by impact.
+- **Spec classification**: split global invariants vs action-specific postconditions (GPOST/HSPOST).
 - **Exception audit**: capture legitimate exceptions (bad debt, emergency modes, timelocks).
 - **Observation plan**: decide which values/events you will read to validate each invariant.
 - **Trigger plan**: select the narrowest trigger that guarantees coverage.
@@ -39,6 +40,7 @@ Start here before designing or implementing assertions. This skill defines the i
 - Start with loss‑bearing invariants: solvency, accounting integrity, and upgrade control.
 - Prefer cross‑function invariants over per‑function reverts already in code.
 - If you cannot observe an invariant reliably, rephrase it to observable signals.
+- For lending protocols, classify actions by health‑factor impact and list allowed transitions.
 
 ## Deliverables
 - Invariant matrix (definition, source, exceptions, priority).

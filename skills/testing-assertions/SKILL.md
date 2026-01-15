@@ -26,6 +26,7 @@ Build confidence that assertions block invalid transactions and allow valid ones
 - Run tests with `pcl test`; it behaves like `forge test` (same flags, fuzzing, verbosity), but may lag Forge versions.
 - Tests are Solidity functions starting with `test`; convention is `test/*.t.sol`.
 - Use `FOUNDRY_PROFILE=assertions` (or unit/fuzz/backtest profiles) for predictable config.
+- If proxy/delegatecall makes call inputs unreliable, add a log-based assertion variant and test both.
 
 ## Core Test Patterns
 - **Positive path**: expected to pass and keep state consistent.

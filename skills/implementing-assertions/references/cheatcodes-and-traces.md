@@ -10,10 +10,12 @@
 - `getDelegateCallInputs` isolates delegate calls (useful for proxies).
 - `getStaticCallInputs` and `getCallCodeInputs` target other call types.
 - `getAllCallInputs` includes CALL/STATICCALL/DELEGATECALL/CALLCODE and may duplicate proxy paths.
-- Filter proxy duplicates by ignoring entries where `bytecode_address == target_address`.
+- Filter proxy duplicates by comparing `bytecode_address` and `target_address`; keep the entry that represents the intended code path (often the one where they are equal).
 - Call inputs include `caller`, `value`, `gas_limit`, `bytecode_address`, `target_address`, and `id` for per-call forking.
 - Call input arrays can be large; test worst-case sizes to stay under the 300k gas cap.
 - For router wrappers (batch/call entrypoints), decode nested calldata to extract the real target and account.
+- For delegatecall batches, `getAllCallInputs` is the only way to see nested items; dedupe targets/accounts.
+- For packed calldata protocols, decode inputs using the protocol's bit layout before applying invariants.
 
 ## Logs
 - `getLogs()` returns all logs for the triggering transaction.
@@ -42,3 +44,4 @@
 - `getAssertionAdopter()` is only available in `triggers()` and assertion functions (not constructors).
 - Use `staticcall` to probe optional interfaces; skip checks when unsupported.
 - Enumerating modified mapping keys is not supported; derive keys from call inputs or logs.
+- For intra‑tx stability checks, use `forkPreTx()` as a baseline and `forkPostCall(id)` per call.

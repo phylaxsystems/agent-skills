@@ -38,6 +38,8 @@ contract MyAssertion is Assertion {
 - **Triggers**: use the narrowest possible trigger; avoid global triggers.
 - **Pre/Post**: call `forkPreTx()` only when needed; default is post-state.
 - **Call-Scoped Checks**: use `getCallInputs` + `forkPreCall`/`forkPostCall` for per-call invariants.
+- **Preconditions**: use `before*` hook triggers or `forkPreCall` to assert pre-state requirements.
+- **Baselines**: for intra-tx stability, read `forkPreTx()` once and compare per-call post snapshots.
 - **Event Parsing**: filter by `emitter` and `topics[0]`; decode indexed vs data fields correctly.
 - **Storage Slots**: use `ph.load` for EIP-1967 slots, packed fields, and mappings.
 - **State Changes**: `getStateChanges*` includes the initial value at index 0; length 0 means no changes.
@@ -46,6 +48,8 @@ contract MyAssertion is Assertion {
 - **Tolerances**: use minimal, documented tolerances for price/decimals rounding.
 - **Optional Interfaces**: use `staticcall` probing and skip when unsupported.
 - **Token Quirks**: validate using balance deltas; handle fee-on-transfer and rebasing tokens.
+- **Packed Calldata**: decode using protocol packing logic (assetId, amount, mode) and map ids via helpers.
+- **Delta-Based Supply Checks**: compare totalSupply delta to sum of per-call amounts instead of enumerating users.
 - **Gas**: assertion gas cap is 300k; happy path is often most expensive; early return, cache reads, and limit loops.
 
 ## Rationalizations to Reject

@@ -12,6 +12,7 @@
 ## Packed Fields
 - Packed values share a slot. Use bit masking or shifting after `ph.load`.
 - Example: lower 128 bits for expiration, upper 128 for lifespan.
+- For packed uint40 epochs, extract with `uint40(uint256(slot) >> shift)` and guard underflows.
 
 ## EIP-1967
 - Implementation slot: `0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc`.
@@ -25,3 +26,4 @@
 ## Unstructured Storage
 - For ERC-7201/namespace storage, derive the base slot by hashing the namespace string and applying the offset/mask.
 - Track offsets within the struct, then compute `bytes32(uint256(baseSlot) + offset)`.
+- Keep a short comment with the struct slot index and packing layout; it avoids future misreads.

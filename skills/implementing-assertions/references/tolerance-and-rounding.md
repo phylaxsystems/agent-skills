@@ -9,6 +9,7 @@
 - Keep tolerances minimal and justified (e.g., 0.1% for USD conversions).
 - Derive tolerance from input magnitude (basis points).
 - Avoid fixed absolute tolerances unless token decimals are fixed.
+- Prefer inequality checks (`>=`) when donations/airdrops can increase balances.
 
 ## Example Pattern
 ```solidity
@@ -22,6 +23,10 @@ For tiny amounts, add a 1 wei floor to avoid false positives from rounding:
 uint256 tolerance = expected / 100 + 1; // 1% + 1 wei minimum
 ```
 
+## Typical Lending Rounding
+- For scaled balances (aToken/debt), use `assertApproxEqAbs(..., 1)` or an equivalent 1 wei tolerance.
+
 ## Anti-Patterns
 - Unbounded tolerances that hide real violations.
 - Using tolerance to compensate for logic errors.
+- "Exact match" when the protocol uses mixed decimal scales (document the scale first).

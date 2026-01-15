@@ -7,15 +7,32 @@ Use these as starting points. Pick the smallest invariant that blocks the exploi
 - Observation: pre/post `totalAssets`, `totalSupply` or reserves.
 - Triggers: call triggers on vault operations or controller entrypoints.
 
+## Reserve Configuration Gating
+- Example: supply/borrow only when reserve is active, not paused, not frozen.
+- Observation: read config bits (active/frozen/paused/borrowable).
+- Triggers: call triggers on supply/borrow/withdraw/repay.
+
+## Caps and Limits
+- Example: total supply <= supply cap; total borrow <= borrow cap.
+- Observation: pre/post totalSupply and cap values from config.
+- Triggers: call triggers on supply/borrow; storage triggers on cap slots.
+
 ## Accounting Conservation
 - Example: `totalAssets` moves exactly by settled amounts; transfers out are accounted by events.
 - Observation: parse events with `getLogs` and compare to post-state.
 - Triggers: settlement functions or storage slot changes.
+- Notes: if no settlement event fired, expect no change; use `>=` when airdrops/donations are possible.
+
+## Supply vs User Balances
+- Example: totalSupply equals sum of user balances (aToken/debt token).
+- Observation: compare totalSupply delta to sum of per-call deltas (avoid enumerating accounts).
+- Triggers: call triggers on actions that mint/burn the token.
 
 ## Rate Limits and Time Windows
 - Example: cumulative outflow within a window must not exceed a limit.
 - Observation: pre/post cumulative counters + timestamp reset logic.
 - Triggers: outflow entrypoints (borrow, redeem, rebalancer).
+- Check reset semantics: if window expired, counter resets and timestamp advances; otherwise monotonic.
 
 ## Upgradeability and Initialization
 - Example: implementation slot changes only by admin; initializers called once.
@@ -27,10 +44,21 @@ Use these as starting points. Pick the smallest invariant that blocks the exploi
 - Observation: pre/post `ph.load` on EIP-1967 slots + `getCallInputs` for upgrade or mint selectors.
 - Triggers: storage change on the slot or call trigger on upgrade/mint.
 
+## Change-Only-On-Allowed-Actions
+- Example: interest rate, virtual balance, or liquidity index only update on specific actions.
+- Observation: detect change and whitelist permitted selectors or call paths.
+- Triggers: storage trigger on the slot + allowlist check, or call triggers on all modifying actions.
+
 ## Solvency / Reserve Coverage
 - Example: reserved <= total in pools; vault balance >= cash; gauge rewards balance >= liabilities.
 - Observation: post-state view functions; sometimes need loops over reward tokens.
 - Triggers: reserve updates, position execution, or storage change on reserve slots.
+- Backing ratio: protocol-held backing >= minimum exit coverage (xToken backing).
+
+## Index and Scaled Supply Identities
+- Example: `virtualBalance + currentDebt == (scaledATokenSupply + accruedToTreasury) * liquidityIndex`.
+- Observation: scaled supply, accruedToTreasury, and normalized income.
+- Triggers: reserve updates (supply/borrow/repay/withdraw).
 
 ## Coupling Invariants
 - Example: if `totalDebt > 0`, then `baseCollateral > 0`.
@@ -41,6 +69,16 @@ Use these as starting points. Pick the smallest invariant that blocks the exploi
 - Example: account health must remain healthy across controller vaults.
 - Observation: extract affected accounts from call inputs, then check each controller.
 - Triggers: call triggers on protocol entrypoints that touch accounts.
+
+## Health-Factor Classification
+- Example: only specific actions can decrease HF; healthy → unhealthy transitions only via borrow/withdraw or price/interest.
+- Observation: pre/post HF via account data; classify actions as nonIncreasing/nonDecreasing.
+- Triggers: action-specific call triggers + price update hooks.
+
+## Actor Isolation
+- Example: HF changes for actor A do not change HF for unrelated actors.
+- Observation: sample non-targeted accounts before/after.
+- Triggers: action triggers that touch user balances.
 
 ## Oracle Sanity and Cross-Feed Deviation
 - Example: prices must be non-zero, fresh, and within per-symbol deltas.
@@ -57,6 +95,16 @@ Use these as starting points. Pick the smallest invariant that blocks the exploi
 - Observation: post-state `isTotalAssetsValid()` or expiration slot.
 - Triggers: call triggers on both sync and async entrypoints.
 
+## Epoch and Lifecycle State Machines
+- Example: epoch parity (deposit odd, redeem even), ordering (lastSettled <= current - 2), increment by 0 or 2.
+- Observation: packed epoch fields in storage slots; pre/post comparisons.
+- Triggers: epoch-mutating entrypoints (settle, update, sync paths).
+
+## Expiration and Lifespan Rules
+- Example: `expiration == block.timestamp + lifespan` after settlement; manual expire sets expiration to 0.
+- Observation: packed expiration/lifespan slots + `isValid()` flag.
+- Triggers: settlement, expire, and update functions.
+
 ## Supply/Cap Bounds
 - Example: totalSupply <= cap; emissions multiplier within range.
 - Observation: post-state reads and optional pre/post comparison.
@@ -71,6 +119,17 @@ Use these as starting points. Pick the smallest invariant that blocks the exploi
 - Example: upgrade or admin actions only after min delay; no rapid multisig threshold changes.
 - Observation: pre/post timelock fields + timestamps; call inputs for execute/upgrade.
 - Triggers: call triggers on execute/upgrade or storage triggers on delay/threshold slots.
+
+## Grace Periods and Close Factors
+- Example: no liquidation during grace period; liquidation must respect close factor and min leftover dust.
+- Observation: pre/post user debt/collateral and grace period timestamp.
+- Triggers: liquidation entrypoints.
+- Bound grace periods to the protocol-defined max and ensure they update after unpause.
+
+## Deficit Management
+- Example: deficits only created when collateral is zero; deficit equals burned debt; only on active reserves.
+- Observation: pre/post reserve deficit and user debt.
+- Triggers: liquidation or deficit-elimination entrypoints.
 
 ## Emergency Pause Modes
 - Example: when paused, only withdrawals allowed; balances cannot increase.
@@ -91,6 +150,16 @@ Use these as starting points. Pick the smallest invariant that blocks the exploi
 - Example: oracle updates within time window; price deviation within bps; intra-tx deviations.
 - Observation: post-state timestamp + per-call price checks via forkPostCall.
 - Triggers: call triggers on price update or risk-critical functions (borrow/liquidate).
+
+## Intra-Tx Price Stability
+- Example: price must not deviate more than X bps from pre-tx during borrow/liquidate.
+- Observation: pre-tx baseline + per-call post snapshots.
+- Triggers: risk-critical entrypoints and guard hooks.
+
+## Intra-Tx Price Consistency
+- Example: oracle returns the same price on repeated reads within a single tx.
+- Observation: pre/post read on the same asset; compare exact equality.
+- Triggers: borrow/supply/withdraw/flashloan entrypoints.
 
 ## Drain and Outflow Limits
 - Example: per-tx outflow capped; large transfers only to whitelisted recipients.

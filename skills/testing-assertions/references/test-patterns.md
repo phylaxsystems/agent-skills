@@ -18,6 +18,15 @@
 - Avoid low-level fallback calls when possible; revert reasons are cleaner.
 - Internal calls do not trigger assertions; register on external entrypoints.
 
+## Time Windows and Modes
+- Use `vm.warp` to test just-before and just-after window expiration.
+- Cover mode switches (sync/async, paused/unpaused) on both sides.
+
+## Failure Path Checks
+- When a call should fail, assert state is unchanged (balances, debts, indexes).
+- For gatekeeping invariants (borrowable/frozen/paused), test both revert and state‑no‑change.
+- Use `assertApproxEqAbs(..., 1)` for scaled balance rounding.
+
 ## Prank Consumption
 - Do not inline view calls after `vm.prank()`: the inner call consumes the prank.
 - Store values before `vm.prank()` and before `cl.assertion()`.
