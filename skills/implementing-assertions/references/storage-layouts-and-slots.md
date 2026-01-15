@@ -21,3 +21,7 @@
 ## Fork Awareness
 - `ph.load` reads from the current fork; call `forkPreTx()` or `forkPostTx()` first.
 - For intermediate values, use `getStateChanges*` or `forkPreCall`/`forkPostCall` around call ids.
+
+## Unstructured Storage
+- For ERC-7201/namespace storage, derive the base slot by hashing the namespace string and applying the offset/mask.
+- Track offsets within the struct, then compute `bytes32(uint256(baseSlot) + offset)`.

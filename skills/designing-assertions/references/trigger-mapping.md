@@ -11,6 +11,7 @@
 - For proxies, use `getDelegateCallInputs` if you only want delegate calls.
 - Internal Solidity calls are not traced; register on external entrypoints.
 - Call inputs are ordered per selector, not across different selectors.
+- For router/batch entrypoints, decode nested calldata to extract the real target and account.
 
 ## Storage Trigger Tips
 - Use specific slot offsets to avoid global triggers.

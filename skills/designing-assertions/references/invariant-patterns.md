@@ -106,8 +106,14 @@ Use these as starting points. Pick the smallest invariant that blocks the exploi
 - Example: minimum supply after market open; deposit must mint >0 shares.
 - Observation: pre/post totalSupply, exchange rate, and deposit amount.
 - Triggers: call triggers on deposit/mint or storage trigger on totalSupply slot.
+- Use protocol-specific conversion formulas (e.g., virtual deposits) to avoid false positives.
 
 ## Phantom Collateral and Value Bounds
 - Example: reported collateral/AUM cannot exceed actual extractable value.
 - Observation: compare view-reported value vs real token balances + oracle rate.
 - Triggers: call triggers on valuation-sensitive entrypoints.
+
+## Configuration and Parameter Bounds
+- Example: oracle staleness, price delta, emission multipliers, or timelock delays stay within safe ranges.
+- Observation: decode config setter inputs and validate post-state matches.
+- Triggers: call triggers on config setters; avoid global storage triggers when possible.

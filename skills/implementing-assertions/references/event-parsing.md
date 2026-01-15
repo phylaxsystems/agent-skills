@@ -17,3 +17,4 @@
 - Mixed event overloads with same name but different types.
 - Ignoring emitted events from nested contracts (e.g., underlying vaults).
 - Logs show emitted events, not intermediate state; backstop with pre/post reads when needed.
+- Some invariants should be inequalities (e.g., `totalTransferred <= totalAccounted`) to allow donations or refunds.

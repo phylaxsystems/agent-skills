@@ -13,6 +13,7 @@
 - Filter proxy duplicates by ignoring entries where `bytecode_address == target_address`.
 - Call inputs include `caller`, `value`, `gas_limit`, `bytecode_address`, `target_address`, and `id` for per-call forking.
 - Call input arrays can be large; test worst-case sizes to stay under the 300k gas cap.
+- For router wrappers (batch/call entrypoints), decode nested calldata to extract the real target and account.
 
 ## Logs
 - `getLogs()` returns all logs for the triggering transaction.
@@ -31,6 +32,9 @@
 
 ## Triggers
 - `registerBalanceChangeTrigger` fires on ETH balance changes for the adopter.
+
+## External Call Verification
+- To ensure a downstream call occurred (e.g., bridge send), query `getCallInputs` on the callee after `forkPostCall`.
 
 ## Notes
 - Internal Solidity calls are not traced unless they are externalized via `this.`.

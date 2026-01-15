@@ -42,6 +42,7 @@ contract MyAssertion is Assertion {
 - **Storage Slots**: use `ph.load` for EIP-1967 slots, packed fields, and mappings.
 - **State Changes**: `getStateChanges*` includes the initial value at index 0; length 0 means no changes.
 - **Nested Calls**: avoid double counting; prefer `getCallInputs` to avoid proxy duplicates.
+- **Batch Dedupe**: deduplicate targets/accounts when a batch can repeat entries.
 - **Tolerances**: use minimal, documented tolerances for price/decimals rounding.
 - **Optional Interfaces**: use `staticcall` probing and skip when unsupported.
 - **Token Quirks**: validate using balance deltas; handle fee-on-transfer and rebasing tokens.
