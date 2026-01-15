@@ -5,6 +5,12 @@
 - **Roles**: owner/admin/timelock, guardians, rebalancer EOAs, oracles.
 - **Entrypoints**: external functions that move value or modify critical state.
 - **Critical state**: totals, exchange rates, health factors, caps, expirations.
+- **Routers**: batch/call hubs and controller contracts that centralize flows.
+
+## Step 1.5: Evidence Sources
+- Protocol specs, docs, and whitepapers.
+- Audit reports and invariant test suites.
+- Existing production assertions or incident postmortems.
 
 ## Step 2: Invariant Inventory (by category)
 - **Access control**: only authorized upgrades, minting, role changes.
@@ -39,3 +45,4 @@ For each invariant:
 - **What it reads** (state/logs/inputs).
 - **Exceptions** (explicit checks).
 - **Priority** (P0/P1/P2).
+- **Gas risk** (loop sizes, per‑call forking, log scans).

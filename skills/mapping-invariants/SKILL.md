@@ -18,21 +18,27 @@ Start here before designing or implementing assertions. This skill defines the i
 - You only need testing guidance. Use `testing-assertions`.
 
 ## Quick Start
-1. Build the protocol map (assets, roles, entrypoints, state).
+1. Build the protocol map (assets, roles, entrypoints, state, routers).
 2. Enumerate invariants by category (access control, accounting, pricing, solvency, limits, modes).
-3. Identify exceptions and acceptable violations.
-4. Pick data sources (state, logs, call inputs, slots).
-5. Choose enforcement location (chokepoint vs per‑contract).
-6. Produce the invariant matrix and trigger map.
-7. Hand off to `designing-assertions` → `implementing-assertions` → `testing-assertions`.
+3. Rank invariants by impact and likelihood (losses, control‑plane, liveness).
+4. Identify exceptions and acceptable violations.
+5. Pick data sources (state, logs, call inputs, slots).
+6. Choose enforcement location (chokepoint vs per‑contract).
+7. Produce the invariant matrix and trigger map.
+8. Hand off to `designing-assertions` → `implementing-assertions` → `testing-assertions`.
 
 ## Workflow
-- **Protocol map**: read docs/specs/audits; list contracts, assets, roles, and critical entrypoints.
+- **Protocol map**: read docs/specs/audits/tests; list contracts, assets, roles, and critical entrypoints.
 - **Invariant inventory**: express “states that must never occur” and rank by impact.
 - **Exception audit**: capture legitimate exceptions (bad debt, emergency modes, timelocks).
 - **Observation plan**: decide which values/events you will read to validate each invariant.
 - **Trigger plan**: select the narrowest trigger that guarantees coverage.
-- **Coverage check**: confirm each invariant is reachable from at least one trigger.
+- **Coverage check**: confirm each invariant is reachable from at least one trigger and entrypoint.
+
+## Heuristics
+- Start with loss‑bearing invariants: solvency, accounting integrity, and upgrade control.
+- Prefer cross‑function invariants over per‑function reverts already in code.
+- If you cannot observe an invariant reliably, rephrase it to observable signals.
 
 ## Deliverables
 - Invariant matrix (definition, source, exceptions, priority).
@@ -44,6 +50,7 @@ Start here before designing or implementing assertions. This skill defines the i
 - “We can skip invariant mapping and write code directly.”
 - “We only need owner checks.” (Protocols usually fail on accounting and pricing.)
 - “One broad assertion is enough.” (Gas and coverage risks.)
+- “We’ll add exceptions later.” (Most false positives come from ignored exceptions.)
 
 ## References
 - [Invariant Mapping Workflow](references/invariant-mapping-workflow.md)
