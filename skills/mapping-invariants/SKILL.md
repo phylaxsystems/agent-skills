@@ -57,3 +57,4 @@ Start here before designing or implementing assertions. This skill defines the i
 ## References
 - [Invariant Mapping Workflow](references/invariant-mapping-workflow.md)
 - [Protocol Example Patterns](references/protocol-examples.md)
+- [Lending Protocol Invariant Checklist](references/lending-invariant-checklist.md)

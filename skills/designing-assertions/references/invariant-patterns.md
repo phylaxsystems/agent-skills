@@ -54,11 +54,17 @@ Use these as starting points. Pick the smallest invariant that blocks the exploi
 - Observation: post-state view functions; sometimes need loops over reward tokens.
 - Triggers: reserve updates, position execution, or storage change on reserve slots.
 - Backing ratio: protocol-held backing >= minimum exit coverage (xToken backing).
+- Net liability coverage: underlying >= (deposit supply - debt supply).
 
 ## Index and Scaled Supply Identities
 - Example: `virtualBalance + currentDebt == (scaledATokenSupply + accruedToTreasury) * liquidityIndex`.
 - Observation: scaled supply, accruedToTreasury, and normalized income.
 - Triggers: reserve updates (supply/borrow/repay/withdraw).
+
+## Index Monotonicity
+- Example: interest indexes only increase when time advances.
+- Observation: pre/post index with timestamp delta.
+- Triggers: reserve‑updating entrypoints.
 
 ## Coupling Invariants
 - Example: if `totalDebt > 0`, then `baseCollateral > 0`.
@@ -74,11 +80,17 @@ Use these as starting points. Pick the smallest invariant that blocks the exploi
 - Example: only specific actions can decrease HF; healthy → unhealthy transitions only via borrow/withdraw or price/interest.
 - Observation: pre/post HF via account data; classify actions as nonIncreasing/nonDecreasing.
 - Triggers: action-specific call triggers + price update hooks.
+- Allow exceptions for price updates or interest accrual if they are external to user actions.
 
 ## Actor Isolation
 - Example: HF changes for actor A do not change HF for unrelated actors.
 - Observation: sample non-targeted accounts before/after.
 - Triggers: action triggers that touch user balances.
+
+## Position Flags Consistency
+- Example: if a user has debt, borrowing flag is true; if no collateral, collateral flag is false.
+- Observation: compare user config flags vs balances.
+- Triggers: borrow/repay/supply/withdraw.
 
 ## Oracle Sanity and Cross-Feed Deviation
 - Example: prices must be non-zero, fresh, and within per-symbol deltas.
@@ -94,6 +106,11 @@ Use these as starting points. Pick the smallest invariant that blocks the exploi
 - Example: sync deposit allowed only when NAV valid; async otherwise.
 - Observation: post-state `isTotalAssetsValid()` or expiration slot.
 - Triggers: call triggers on both sync and async entrypoints.
+
+## Mode and Category Restrictions
+- Example: borrowable assets in a risk category; switching category keeps HF >= 1.
+- Observation: category config + user positions.
+- Triggers: category switch and borrow entrypoints.
 
 ## Epoch and Lifecycle State Machines
 - Example: epoch parity (deposit odd, redeem even), ordering (lastSettled <= current - 2), increment by 0 or 2.
@@ -131,6 +148,11 @@ Use these as starting points. Pick the smallest invariant that blocks the exploi
 - Observation: pre/post reserve deficit and user debt.
 - Triggers: liquidation or deficit-elimination entrypoints.
 
+## Liveness / Exit Guarantees
+- Example: full repay succeeds when debt > 0; full withdraw succeeds when no debt.
+- Observation: enforce success or state‑no‑change on failure.
+- Triggers: repay/withdraw entrypoints.
+
 ## Emergency Pause Modes
 - Example: when paused, only withdrawals allowed; balances cannot increase.
 - Observation: pre/post pause flag + balance deltas; call inputs for deposit/mint.
@@ -160,6 +182,11 @@ Use these as starting points. Pick the smallest invariant that blocks the exploi
 - Example: oracle returns the same price on repeated reads within a single tx.
 - Observation: pre/post read on the same asset; compare exact equality.
 - Triggers: borrow/supply/withdraw/flashloan entrypoints.
+
+## Flashloan Safety
+- Example: pool balance after >= pre + fee; fail if amount+fee not returned.
+- Observation: pre/post pool balance; fee computation.
+- Triggers: flashloan entrypoints.
 
 ## Drain and Outflow Limits
 - Example: per-tx outflow capped; large transfers only to whitelisted recipients.

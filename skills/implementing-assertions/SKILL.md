@@ -50,6 +50,7 @@ contract MyAssertion is Assertion {
 - **Token Quirks**: validate using balance deltas; handle fee-on-transfer and rebasing tokens.
 - **Packed Calldata**: decode using protocol packing logic (assetId, amount, mode) and map ids via helpers.
 - **Delta-Based Supply Checks**: compare totalSupply delta to sum of per-call amounts instead of enumerating users.
+- **Id Mapping Guards**: if a packed id maps to `address(0)`, skip or fail early to avoid false positives.
 - **Gas**: assertion gas cap is 300k; happy path is often most expensive; early return, cache reads, and limit loops.
 
 ## Rationalizations to Reject

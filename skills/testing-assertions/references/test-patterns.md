@@ -26,6 +26,8 @@
 - When a call should fail, assert state is unchanged (balances, debts, indexes).
 - For gatekeeping invariants (borrowable/frozen/paused), test both revert and state‑no‑change.
 - Use `assertApproxEqAbs(..., 1)` for scaled balance rounding.
+- For liveness invariants, assert full repay/withdraw succeeds under the expected preconditions.
+- For flashloans, test both repayment success and insufficient repayment failure.
 
 ## Prank Consumption
 - Do not inline view calls after `vm.prank()`: the inner call consumes the prank.

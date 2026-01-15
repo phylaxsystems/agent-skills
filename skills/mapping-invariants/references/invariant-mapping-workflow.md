@@ -25,6 +25,7 @@
 - **Cross‑contract**: routing or controller invariants across modules.
 - **Health factor**: classify actions by HF impact; define safe/unsafe transitions.
 - **Deficit management**: deficit creation, accounting, and elimination rules.
+- **Position flags**: config flags reflect actual debt/collateral positions.
 
 ## Step 3: Exceptions
 Examples:
