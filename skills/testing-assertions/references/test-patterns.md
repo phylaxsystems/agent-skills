@@ -28,6 +28,7 @@
 - Use `assertApproxEqAbs(..., 1)` for scaled balance rounding.
 - For liveness invariants, assert full repay/withdraw succeeds under the expected preconditions.
 - For flashloans, test both repayment success and insufficient repayment failure.
+- Include sentinel max values for "full repay/withdraw" to exercise normalization logic.
 
 ## Prank Consumption
 - Do not inline view calls after `vm.prank()`: the inner call consumes the prank.
@@ -51,6 +52,8 @@
 - Run with `--ffi` or a profile that sets `ffi = true`.
 - Prefer `useTraceFilter = true` to capture internal calls; use `forkByTxHash` for exact state debugging.
 - Expect result buckets like PASS, NEEDS_REVIEW (selector mismatch / prestate issues), ASSERTION_FAIL, UNKNOWN_ERROR.
+- Skip or early-return if RPC env vars are missing.
+- Use one backtest per assertion selector to isolate failures.
 
 ## PCL Test Parity
 - `pcl test` is a fork of `forge test` with identical behavior and flags.

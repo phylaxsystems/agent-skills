@@ -5,12 +5,19 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {CredibleTestWithBacktesting} from "credible-std/backtesting/CredibleTestWithBacktesting.sol";
-import {BacktestingTypes} from "credible-std/backtesting/BacktestingTypes.sol";
+import {CredibleTestWithBacktesting} from "credible-std/CredibleTestWithBacktesting.sol";
+import {BacktestingTypes} from "credible-std/utils/BacktestingTypes.sol";
 import {MyAssertion} from "../../assertions/src/MyAssertion.a.sol";
 
 contract MyBacktestingTest is CredibleTestWithBacktesting {
     function testBacktest_RecentBlocks() public {
+        string memory rpcUrl;
+        try vm.envString("MAINNET_RPC_URL") returns (string memory url) {
+            rpcUrl = url;
+        } catch {
+            return; // Skip if RPC not configured
+        }
+
         BacktestingTypes.BacktestingResults memory results = executeBacktest(
             BacktestingTypes.BacktestingConfig({
                 targetContract: 0x1111111111111111111111111111111111111111,
@@ -18,7 +25,7 @@ contract MyBacktestingTest is CredibleTestWithBacktesting {
                 blockRange: 50,
                 assertionCreationCode: type(MyAssertion).creationCode,
                 assertionSelector: MyAssertion.assertionInvariant.selector,
-                rpcUrl: vm.envString("MAINNET_RPC_URL"),
+                rpcUrl: rpcUrl,
                 detailedBlocks: false,
                 useTraceFilter: true,
                 forkByTxHash: false
@@ -33,6 +40,7 @@ contract MyBacktestingTest is CredibleTestWithBacktesting {
 ## Running Backtests
 - `FOUNDRY_PROFILE=backtest-assertions pcl test --ffi`
 - Set `ffi = true` in the backtest profile to avoid `--ffi`.
+- If the script path is not found, set `CREDIBLE_STD_PATH` to the credible-std repo root.
 
 ## Config Tips
 - `useTraceFilter = true` detects internal calls; requires RPC support.

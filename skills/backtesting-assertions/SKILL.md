@@ -26,14 +26,17 @@ Use Credible Layer backtesting to replay historical transactions with assertions
 ## Workflow
 - Pick a target contract (the assertion adopter address).
 - Choose `endBlock` and `blockRange`.
+- Verify RPC env vars; skip or fallback when missing.
 - Prefer `useTraceFilter = true` to detect internal calls.
 - Use `forkByTxHash = true` only when debugging state-dependent failures.
 - Interpret results: `ASSERTION_FAIL` often indicates false positives or gas issues.
+- If many `SKIP`, the selector/target does not match; adjust target or selector.
 
 ## Rationalizations to Reject
 - "We only need unit tests." Backtesting catches real-world call patterns.
 - "Trace filter is optional." Without it you miss internal calls.
 - "forkByTxHash everywhere." It is slow and RPC-heavy; use it for debugging only.
+- "RPC isn't needed." Backtesting requires a working RPC and FFI.
 
 ## References
 - [Backtesting Template](references/backtesting-template.md)

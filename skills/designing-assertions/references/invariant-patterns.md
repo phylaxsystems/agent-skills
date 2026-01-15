@@ -22,6 +22,7 @@ Use these as starting points. Pick the smallest invariant that blocks the exploi
 - Observation: parse events with `getLogs` and compare to post-state.
 - Triggers: settlement functions or storage slot changes.
 - Notes: if no settlement event fired, expect no change; use `>=` when airdrops/donations are possible.
+- If internal accounting increases, actual balances should not decrease in the same transaction.
 
 ## Supply vs User Balances
 - Example: totalSupply equals sum of user balances (aToken/debt token).
@@ -81,6 +82,11 @@ Use these as starting points. Pick the smallest invariant that blocks the exploi
 - Observation: pre/post HF via account data; classify actions as nonIncreasing/nonDecreasing.
 - Triggers: action-specific call triggers + price update hooks.
 - Allow exceptions for price updates or interest accrual if they are external to user actions.
+
+## Collateral Token Transfer Safety
+- Example: transferring collateral tokens should not make the sender unhealthy.
+- Observation: pre/post HF of sender; exclude zero-amount and self-transfers.
+- Triggers: `transfer`/`transferFrom` on collateral tokens.
 
 ## Actor Isolation
 - Example: HF changes for actor A do not change HF for unrelated actors.
@@ -152,6 +158,7 @@ Use these as starting points. Pick the smallest invariant that blocks the exploi
 - Example: full repay succeeds when debt > 0; full withdraw succeeds when no debt.
 - Observation: enforce success or state‑no‑change on failure.
 - Triggers: repay/withdraw entrypoints.
+- Account for sentinel amounts (max uint) meaning "full balance" in the protocol.
 
 ## Emergency Pause Modes
 - Example: when paused, only withdrawals allowed; balances cannot increase.

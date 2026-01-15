@@ -24,6 +24,7 @@ Use this checklist to map invariants for pool/lending protocols without anchorin
 - Full repay should always succeed when reserve is active.
 - Full withdraw should succeed when user has no debt.
 - Borrow requires sufficient collateral and liquidity.
+- Identify any sentinel amounts (max uint) that represent "full balance."
 
 ## Liquidation Rules
 - Liquidation only if HF < threshold.
@@ -50,3 +51,4 @@ Use this checklist to map invariants for pool/lending protocols without anchorin
 
 ## Token Transfer Safety
 - Transfer/transferFrom of deposit tokens must not make sender unhealthy.
+- Exclude zero-amount transfers and self-transfers from HF checks.

@@ -16,6 +16,7 @@
 - For router wrappers (batch/call entrypoints), decode nested calldata to extract the real target and account.
 - For delegatecall batches, `getAllCallInputs` is the only way to see nested items; dedupe targets/accounts.
 - For packed calldata protocols, decode inputs using the protocol's bit layout before applying invariants.
+- If a protocol uses sentinel values (e.g., max uint for "full repay"), replace with the pre-state balance/debt.
 
 ## Logs
 - `getLogs()` returns all logs for the triggering transaction.
