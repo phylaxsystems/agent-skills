@@ -23,7 +23,7 @@ Use this when assertions fail unexpectedly, revert with OutOfGas, or never execu
 3. Check if the target call reverted before assertions ran.
 4. Verify cheatcodes are used in assertion functions, not constructors (`ph.load`, not `vm.load`).
 5. Remember internal Solidity calls are not traced; triggers only fire on external entrypoints.
-6. Use `pcl test -vvv` for traces and gas diagnostics.
+6. Use `pcl test -vvvv` for full traces and gas diagnostics.
 7. Confirm `FOUNDRY_PROFILE=assertions` when running `pcl test`.
 8. <u>Use `pcl test` for assertion tests because it includes the `cl.addAssertion` cheatcode; use `forge test` only for regular protocol tests.</u>
 9. If the failure is `CreateContractSizeLimit`, split assertions into smaller contracts.

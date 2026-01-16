@@ -71,4 +71,4 @@ ffi = true
 ## Debugging
 - Reduce `blockRange` around the failing block.
 - Flip `forkByTxHash = true` when state dependencies are suspected.
-- Use `pcl test -vvv` for logs and traces.
+- Use `pcl test -vvvv` for full logs and traces.

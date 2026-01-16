@@ -27,6 +27,7 @@ Build confidence that assertions block invalid transactions and allow valid ones
 - Add batch helper contracts for multi-operation transactions.
 - If you must use fallback-based batches, call `address(batch).call("")` and assert on the `success` flag.
 - Consider property-based testing (Echidna) for state invariants.
+- For Forge cheatcodes (`vm.*`), see the Forge Book cheatcodes page and `forge-std/src/Vm.sol`; for Credible testing cheats (`cl.*`), see `credible-std/src/CredibleTest.sol` plus `/credible/testing-assertions` and `/credible/cheatcodes-reference` in phylax-docs.
 - <u>Use `pcl test` for assertion tests because it includes the `cl.addAssertion` cheatcode; use `forge test` only for regular protocol tests.</u>
 - `pcl test` accepts `forge test` flags (fuzzing, verbosity), but may lag Forge versions.
 - Tests are Solidity functions starting with `test`; convention is `test/*.t.sol`.
@@ -43,7 +44,7 @@ Build confidence that assertions block invalid transactions and allow valid ones
 ## Gas Limit Checks
 - Assertions are capped at 300k gas.
 - The happy path is often the most expensive. Test with max sizes.
-- Use `pcl test -vvv` to inspect per-call gas usage.
+- Use `pcl test -vvvv` to inspect full traces and per-call gas usage.
 
 ## Rationalizations to Reject
 - "One passing test is enough." Assertions must also fail on violations.
