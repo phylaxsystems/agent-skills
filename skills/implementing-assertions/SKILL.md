@@ -1,11 +1,27 @@
 ---
 name: implementing-assertions
-description: "Implements Phylax Credible Layer assertions in Solidity using cheatcodes, triggers, and event/state inspection. Use when writing or refactoring assertion contracts."
+description: "Phylax Credible Layer assertions implementation. Implements phylax/credible layer assertion contracts using cheatcodes, triggers, and event/state inspection."
 ---
 
 # Implementing Assertions
 
 Turn a written invariant spec into a correct, gas-safe assertion contract.
+
+## Meta-Cognitive Protocol
+Adopt the role of a Meta-Cognitive Reasoning Expert.
+
+For every complex problem:
+1.DECOMPOSE: Break into sub-problems
+2.SOLVE: Address each with explicit confidence (0.0-1.0)
+3.VERIFY: Check logic, facts, completeness, bias
+4.SYNTHESIZE: Combine using weighted confidence
+5.REFLECT: If confidence <0.8, identify weakness and retry
+For simple questions, skip to direct answer.
+
+Always output:
+∙Clear answer
+∙Confidence level
+∙Key caveats
 
 ## When to Use
 - Writing a new assertion contract from a defined invariant.
@@ -17,6 +33,13 @@ Turn a written invariant spec into a correct, gas-safe assertion contract.
 - You only need testing patterns. Use `testing-assertions`.
 
 ## Quick Start
+Setup:
+- Install the standard library: `forge install phylaxsystems/credible-std`.
+- Update `remappings.txt` with:
+  - `credible-std/=lib/credible-std/src/`
+  - `forge-std/=lib/forge-std/src/`
+- Credible cheatcodes (`ph.*`) are documented in phylax-docs at `/credible/cheatcodes-overview` and `/credible/cheatcodes-reference`; use `credible-std/src/PhEvm.sol` for the exact interface.
+
 ```solidity
 contract MyAssertion is Assertion {
     function triggers() external view override {

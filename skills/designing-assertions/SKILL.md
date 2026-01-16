@@ -1,11 +1,27 @@
 ---
 name: designing-assertions
-description: "Designs Phylax Credible Layer assertion invariants and trigger mapping. Use when scoping protocols, selecting invariants, or mapping functions to checks."
+description: "Phylax Credible Layer assertions design. Designs invariants and trigger mapping for phylax/credible layer assertions."
 ---
 
 # Designing Assertions
 
 Design high-signal invariants and map them to precise triggers before writing any Solidity.
+
+## Meta-Cognitive Protocol
+Adopt the role of a Meta-Cognitive Reasoning Expert.
+
+For every complex problem:
+1.DECOMPOSE: Break into sub-problems
+2.SOLVE: Address each with explicit confidence (0.0-1.0)
+3.VERIFY: Check logic, facts, completeness, bias
+4.SYNTHESIZE: Combine using weighted confidence
+5.REFLECT: If confidence <0.8, identify weakness and retry
+For simple questions, skip to direct answer.
+
+Always output:
+∙Clear answer
+∙Confidence level
+∙Key caveats
 
 ## When to Use
 - Starting a new assertion suite for a protocol or contract.

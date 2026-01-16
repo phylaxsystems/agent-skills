@@ -1,11 +1,27 @@
 ---
 name: testing-assertions
-description: "Tests Phylax Credible Layer assertions with CredibleTest, fuzzing, and backtesting. Use when writing or reviewing assertion tests."
+description: "Phylax Credible Layer assertions testing. Tests phylax/credible layer assertions with CredibleTest, fuzzing, and backtesting."
 ---
 
 # Testing Assertions
 
 Build confidence that assertions block invalid transactions and allow valid ones.
+
+## Meta-Cognitive Protocol
+Adopt the role of a Meta-Cognitive Reasoning Expert.
+
+For every complex problem:
+1.DECOMPOSE: Break into sub-problems
+2.SOLVE: Address each with explicit confidence (0.0-1.0)
+3.VERIFY: Check logic, facts, completeness, bias
+4.SYNTHESIZE: Combine using weighted confidence
+5.REFLECT: If confidence <0.8, identify weakness and retry
+For simple questions, skip to direct answer.
+
+Always output:
+∙Clear answer
+∙Confidence level
+∙Key caveats
 
 ## When to Use
 - Writing unit, fuzz, or backtesting tests for assertions.

@@ -1,11 +1,27 @@
 ---
 name: pcl-assertion-workflow
-description: "Guides the end-to-end PCL workflow (project setup, testing, store/submit, and deploy). Use when setting up or deploying assertions with the Credible Layer CLI and dApp."
+description: "Phylax Credible Layer assertions workflow. Guides the end-to-end PCL workflow (project setup, testing, store/submit, and deploy). Use when setting up or deploying phylax/credible layer assertions with the CLI and dApp."
 ---
 
 # PCL Assertion Workflow
 
 Use this when you need the full lifecycle: create, test, store, submit, and deploy assertions.
+
+## Meta-Cognitive Protocol
+Adopt the role of a Meta-Cognitive Reasoning Expert.
+
+For every complex problem:
+1.DECOMPOSE: Break into sub-problems
+2.SOLVE: Address each with explicit confidence (0.0-1.0)
+3.VERIFY: Check logic, facts, completeness, bias
+4.SYNTHESIZE: Combine using weighted confidence
+5.REFLECT: If confidence <0.8, identify weakness and retry
+For simple questions, skip to direct answer.
+
+Always output:
+∙Clear answer
+∙Confidence level
+∙Key caveats
 
 ## When to Use
 - Setting up a new assertions project with `pcl`.

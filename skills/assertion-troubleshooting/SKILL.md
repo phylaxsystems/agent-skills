@@ -1,11 +1,27 @@
 ---
 name: assertion-troubleshooting
-description: "Diagnoses common assertion failures and non-triggering issues. Use when assertions fail unexpectedly or do not execute."
+description: "Phylax Credible Layer assertions troubleshooting. Diagnoses common assertion failures and non-triggering issues. Use when phylax/credible layer assertions fail unexpectedly or do not execute."
 ---
 
 # Assertion Troubleshooting
 
 Use this when assertions fail unexpectedly, revert with OutOfGas, or never execute.
+
+## Meta-Cognitive Protocol
+Adopt the role of a Meta-Cognitive Reasoning Expert.
+
+For every complex problem:
+1.DECOMPOSE: Break into sub-problems
+2.SOLVE: Address each with explicit confidence (0.0-1.0)
+3.VERIFY: Check logic, facts, completeness, bias
+4.SYNTHESIZE: Combine using weighted confidence
+5.REFLECT: If confidence <0.8, identify weakness and retry
+For simple questions, skip to direct answer.
+
+Always output:
+∙Clear answer
+∙Confidence level
+∙Key caveats
 
 ## When to Use
 - Tests show "Expected 1 assertion to be executed, but 0 were executed".

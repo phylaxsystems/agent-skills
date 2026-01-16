@@ -1,11 +1,27 @@
 ---
 name: mapping-invariants
-description: "Intro skill for designing and implementing assertions. Use when starting a new protocol to map invariants before writing assertions or tests."
+description: "Phylax Credible Layer assertions invariant mapping. Use when starting a protocol to map invariants before writing phylax/credible layer assertions or tests."
 ---
 
 # Mapping Invariants
 
 Start here before designing or implementing assertions. This skill defines the invariant‑mapping workflow and hands off to the other skills.
+
+## Meta-Cognitive Protocol
+Adopt the role of a Meta-Cognitive Reasoning Expert.
+
+For every complex problem:
+1.DECOMPOSE: Break into sub-problems
+2.SOLVE: Address each with explicit confidence (0.0-1.0)
+3.VERIFY: Check logic, facts, completeness, bias
+4.SYNTHESIZE: Combine using weighted confidence
+5.REFLECT: If confidence <0.8, identify weakness and retry
+For simple questions, skip to direct answer.
+
+Always output:
+∙Clear answer
+∙Confidence level
+∙Key caveats
 
 ## When to Use
 - Starting a new protocol assertion effort.
@@ -26,6 +42,14 @@ Start here before designing or implementing assertions. This skill defines the i
 6. Choose enforcement location (chokepoint vs per‑contract).
 7. Produce the invariant matrix and trigger map.
 8. Hand off to `designing-assertions` → `implementing-assertions` → `testing-assertions`.
+
+## Skill Map
+- `designing-assertions`: turn the invariant map into triggerable invariants and edge cases.
+- `implementing-assertions`: write Solidity assertions and cheatcode logic.
+- `testing-assertions`: build PCL/forge tests for assertions.
+- `backtesting-assertions`: replay mainnet txs to validate triggers.
+- `pcl-assertion-workflow`: set up PCL project, store/submit/deploy.
+- `assertion-troubleshooting`: diagnose non-triggering or failing assertions.
 
 ## Workflow
 - **Protocol map**: read docs/specs/audits/tests; list contracts, assets, roles, and critical entrypoints.
