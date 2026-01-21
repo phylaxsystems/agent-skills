@@ -34,10 +34,13 @@ Always output:
 - You only need Solidity implementation details. Use `implementing-assertions`.
 
 ## Quick Start
-1. Create a test that inherits `CredibleTestWithBacktesting`.
-2. Configure `BacktestingConfig` with target contract, block range, and assertion selector.
-3. Call `executeBacktest` and assert failures are zero.
-4. Run with `--ffi` or a profile that enables FFI.
+1. Place backtest files in `assertions/test/backtest/` (e.g., `VaultAssertion.backtest.t.sol`).
+2. Create a test that inherits `CredibleTestWithBacktesting`.
+3. Configure `BacktestingConfig` with target contract, block range, and assertion selector.
+4. Call `executeBacktest` and assert failures are zero.
+5. Run with the backtest profile: `FOUNDRY_PROFILE=assertions-backtest pcl test` (or use `--ffi` flag).
+
+See `pcl-assertion-workflow` for the full profile configuration with `ffi = true`.
 
 ## Workflow
 - Pick a target contract (the assertion adopter address).

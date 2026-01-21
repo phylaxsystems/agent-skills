@@ -59,3 +59,35 @@
 ## Wrong Profile
 - Cause: `pcl test` uses the default Foundry profile.
 - Fix: set `FOUNDRY_PROFILE=assertions` (or unit/fuzz/backtest profile).
+
+## Anti-Pattern: Dispatcher Functions
+Routing many triggers through one assertion function hurts gas and debugging:
+```solidity
+// ❌ WRONG: Many triggers → one dispatcher
+function triggers() external view override {
+    registerCallTrigger(this.assertionOwnership.selector, IVault.setFee.selector);
+    registerCallTrigger(this.assertionOwnership.selector, IVault.setGuardian.selector);
+    registerCallTrigger(this.assertionOwnership.selector, IVault.submitCap.selector);
+}
+```
+```solidity
+// ✅ CORRECT: One trigger → one assertion function
+function triggers() external view override {
+    registerCallTrigger(this.assertionSetFee.selector, IVault.setFee.selector);
+    registerCallTrigger(this.assertionSetGuardian.selector, IVault.setGuardian.selector);
+    registerCallTrigger(this.assertionSubmitCap.selector, IVault.submitCap.selector);
+}
+```
+
+## Anti-Pattern: Mixed Interfaces
+Using selectors from different interfaces when one extends the other causes confusion:
+```solidity
+// ❌ CONFUSING: Mixing IERC4626 and IVault
+registerCallTrigger(this.assertionDeposit.selector, IERC4626.deposit.selector);
+registerCallTrigger(this.assertionSubmitCap.selector, IVault.submitCap.selector);
+```
+```solidity
+// ✅ CLEAR: Consistent interface usage
+registerCallTrigger(this.assertionDeposit.selector, IVault.deposit.selector);
+registerCallTrigger(this.assertionSubmitCap.selector, IVault.submitCap.selector);
+```

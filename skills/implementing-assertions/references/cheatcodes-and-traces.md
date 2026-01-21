@@ -31,7 +31,18 @@
 ## Helpers
 - `getAssertionAdopter()` returns the protected contract for the current run.
 - `load(target, slot)` reads a storage slot directly.
-- `console.log` (credible-std) logs a single string; use `Strings.toString` for numbers.
+
+## Console Logging (Debugging)
+`console.log` accepts only strings. Use `string.concat` and `Strings.toString` for numbers:
+```solidity
+import {console} from "forge-std/console.sol";
+import {Strings} from "openzeppelin-contracts/contracts/utils/Strings.sol";
+
+function assertionDebug() external {
+    uint256 value = 123;
+    console.log(string.concat("Value: ", Strings.toString(value)));
+}
+```
 
 ## Triggers
 - `registerBalanceChangeTrigger` fires on ETH balance changes for the adopter.
@@ -48,3 +59,37 @@
 - Use `staticcall` to probe optional interfaces; skip checks when unsupported.
 - Enumerating modified mapping keys is not supported; derive keys from call inputs or logs.
 - For intra‑tx stability checks, use `forkPreTx()` as a baseline and `forkPostCall(id)` per call.
+
+## Intra-Transaction Monitoring Example
+Check intermediate states after each call within a transaction:
+```solidity
+function assertionIntraTxPriceDeviation() external {
+    IOracle oracle = IOracle(ph.getAssertionAdopter());
+
+    // Get baseline before transaction
+    ph.forkPreTx();
+    uint256 initialPrice = oracle.price();
+    uint256 maxPrice = (initialPrice * 110) / 100; // +10%
+    uint256 minPrice = (initialPrice * 90) / 100;  // -10%
+
+    // Check final state
+    ph.forkPostTx();
+    uint256 finalPrice = oracle.price();
+    require(finalPrice >= minPrice && finalPrice <= maxPrice, "Final price deviation");
+
+    // Check each intermediate state
+    PhEvm.CallInputs[] memory updates = ph.getCallInputs(
+        address(oracle),
+        oracle.updatePrice.selector
+    );
+
+    for (uint256 i = 0; i < updates.length; i++) {
+        ph.forkPostCall(updates[i].id);
+        uint256 intermediatePrice = oracle.price();
+        require(
+            intermediatePrice >= minPrice && intermediatePrice <= maxPrice,
+            "Intra-tx price deviation"
+        );
+    }
+}
+```

@@ -33,10 +33,71 @@ Always output:
 - You only need Solidity implementation details. Use `implementing-assertions`.
 - You only need test patterns and fuzzing. Use `testing-assertions`.
 
+## Project Structure
+```
+project/
+├── src/                        # Protocol smart contracts
+├── test/                       # Protocol tests
+├── script/                     # Deployment scripts
+├── assertions/
+│   ├── src/                    # Assertion contracts (.a.sol)
+│   └── test/
+│       ├── unit/               # Unit tests (.t.sol)
+│       ├── fuzz/               # Fuzz tests (.t.sol)
+│       └── backtest/           # Backtest tests (.t.sol)
+├── foundry.toml                # Foundry config with assertion profiles
+└── remappings.txt              # Import remappings
+```
+
+## Foundry Configuration
+Add profiles for assertions in `foundry.toml`:
+```toml
+# Runs all assertion tests
+[profile.assertions]
+src = "assertions/src"
+test = "assertions/test"
+out = "assertions/out"
+cache_path = "assertions/cache"
+
+# Unit tests only
+[profile.assertions-unit]
+src = "assertions/src"
+test = "assertions/test/unit"
+out = "assertions/out"
+cache_path = "assertions/cache"
+
+# Fuzz tests only
+[profile.assertions-fuzz]
+src = "assertions/src"
+test = "assertions/test/fuzz"
+out = "assertions/out"
+cache_path = "assertions/cache"
+
+# Backtests only (requires ffi)
+[profile.assertions-backtest]
+src = "assertions/src"
+test = "assertions/test/backtest"
+out = "assertions/out"
+cache_path = "assertions/cache"
+ffi = true
+```
+
+Add remappings to `remappings.txt`:
+```
+credible-std/=lib/credible-std/src/
+forge-std/=lib/forge-std/src/
+```
+
+Usage:
+- All tests: `FOUNDRY_PROFILE=assertions pcl test`
+- Unit only: `FOUNDRY_PROFILE=assertions-unit pcl test`
+- Fuzz only: `FOUNDRY_PROFILE=assertions-fuzz pcl test`
+- Backtests only: `FOUNDRY_PROFILE=assertions-backtest pcl test`
+
 ## Quick Start
-1. From the protocol repo root, keep the standard Foundry layout: `src/`, `test/`, `assertions/src/`, `assertions/test/`.
-2. Configure a dedicated Foundry profile (e.g., `[profile.assertions]`) pointing `src` and `test` to the assertions paths, and add remappings for `credible-std` and `forge-std`. Consider separate `out`/`cache_path` to avoid collisions.
-2. Initialize or clone a project (e.g., `credible-layer-starter`).
+1. From the protocol repo root, set up the directory structure above.
+2. Install dependencies: `forge install phylaxsystems/credible-std`.
+3. Configure `foundry.toml` and `remappings.txt` as shown above.
 3. Run `FOUNDRY_PROFILE=assertions pcl test` to validate locally. <u>Use `pcl test` for assertion tests because it includes the `cl.addAssertion` cheatcode; use `forge test` only for regular protocol tests.</u>
 4. Deploy target contracts with `forge script`.
 5. Authenticate: `pcl auth login`.

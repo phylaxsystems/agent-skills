@@ -41,13 +41,19 @@ Setup:
 - Credible cheatcodes (`ph.*`) are documented at https://docs.phylax.systems/credible/cheatcodes-overview and https://docs.phylax.systems/credible/cheatcodes-reference; use `credible-std/src/PhEvm.sol` in https://github.com/phylaxsystems/credible-std for the exact interface.
 - Credible Layer overview: https://docs.phylax.systems/credible/credible-introduction.
 
+## File and Naming Conventions
+- **Assertion files**: `{ContractOrFeature}Assertion.a.sol` (e.g., `VaultOwnerAssertion.a.sol`)
+- **Test files**: `{ContractOrFeature}Assertion.t.sol` (e.g., `VaultOwnerAssertion.t.sol`)
+- **Assertion functions**: must start with `assertion` followed by the property name (e.g., `assertionOwnershipChange`, `assertionHealthFactor`, `assertionSupplyCap`)
+- **Directory structure**: `assertions/src/` for assertion contracts, `assertions/test/` for tests
+
 ```solidity
 contract MyAssertion is Assertion {
     function triggers() external view override {
-        registerCallTrigger(this.assertInvariant.selector, ITarget.doThing.selector);
+        registerCallTrigger(this.assertionMonotonic.selector, ITarget.doThing.selector);
     }
 
-    function assertInvariant() external {
+    function assertionMonotonic() external {
         ITarget target = ITarget(ph.getAssertionAdopter());
         ph.forkPreTx();
         uint256 pre = target.totalAssets();
@@ -83,6 +89,58 @@ contract MyAssertion is Assertion {
 - **Sentinel Amounts**: normalize `max`/sentinel values (e.g., full repay/withdraw) using pre-state.
 - **Gas**: assertion gas cap is 300k; happy path is often most expensive; early return, cache reads, and limit loops.
 - **Size Limit**: organize assertions by domain (e.g., access control, timelock, accounting) and split if you hit `CreateContractSizeLimit`.
+
+## Anti-Patterns
+
+### ❌ Dispatcher Pattern (Avoid)
+Do not route multiple triggers through one assertion function that dispatches to helpers:
+```solidity
+// ❌ WRONG: Many triggers → one dispatcher → helpers
+function triggers() external view override {
+    registerCallTrigger(this.assertionOwnership.selector, IVault.setFee.selector);
+    registerCallTrigger(this.assertionOwnership.selector, IVault.setGuardian.selector);
+    registerCallTrigger(this.assertionOwnership.selector, IVault.submitCap.selector);
+}
+
+function assertionOwnership() external {
+    // Dispatches internally based on what was called - hard to debug, wastes gas
+}
+```
+
+### ✅ One Trigger, One Assertion (Preferred)
+Register each trigger to its own assertion function. Share logic via internal helpers:
+```solidity
+// ✅ CORRECT: Each trigger has its own assertion function
+function triggers() external view override {
+    registerCallTrigger(this.assertionSetFee.selector, IVault.setFee.selector);
+    registerCallTrigger(this.assertionSetGuardian.selector, IVault.setGuardian.selector);
+    registerCallTrigger(this.assertionSubmitCap.selector, IVault.submitCap.selector);
+}
+
+function assertionSetFee() external {
+    _checkOnlyOwner(); // Reuse helper
+}
+
+function assertionSetGuardian() external {
+    _checkOnlyOwner(); // Reuse helper
+}
+```
+
+### ❌ Mixed Interfaces (Avoid)
+Do not mix selectors from parent and child interfaces:
+```solidity
+// ❌ CONFUSING: Mixing IERC4626 and IVault when IVault extends IERC4626
+registerCallTrigger(this.assertionDeposit.selector, IERC4626.deposit.selector);
+registerCallTrigger(this.assertionSubmitCap.selector, IVault.submitCap.selector);
+```
+
+### ✅ Consistent Interface (Preferred)
+Use the adopter's interface consistently:
+```solidity
+// ✅ CLEAR: Use IVault for everything since it extends IERC4626
+registerCallTrigger(this.assertionDeposit.selector, IVault.deposit.selector);
+registerCallTrigger(this.assertionSubmitCap.selector, IVault.submitCap.selector);
+```
 
 ## Rationalizations to Reject
 - "Use getAllCallInputs everywhere." It can double-count proxy calls.

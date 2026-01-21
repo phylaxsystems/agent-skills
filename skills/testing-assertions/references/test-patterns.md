@@ -37,8 +37,10 @@
 - Store values before `vm.prank()` and before `cl.assertion()`.
 
 ## Protocol Mocking
-- Build minimal mock contracts that can be forced into invalid states.
-- Use mocks to trigger failure paths that real protocols would normally prevent.
+Well-implemented protocols prevent invalid states, making it impossible to test assertion failure paths against the real contract. Use mocks to verify assertions catch violations:
+- Build minimal mock contracts that can be forced into invalid states (e.g., a mock vault that allows unauthorized fee changes).
+- Use harness contracts that expose internal setters for testing.
+- This is expected behavior: if you cannot trigger an assertion failure against the real protocol, that's a sign the protocol is secure—but you still need to verify the assertion logic works.
 
 ## Fuzzing
 - Fuzz amounts and sequence length to stress loops and rounding paths.
