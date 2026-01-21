@@ -34,11 +34,12 @@ Always output:
 
 ## Quick Start
 Setup:
-- Install the standard library: `forge install phylaxsystems/credible-std`.
+- Install the standard library: `forge install phylaxsystems/credible-std` (https://github.com/phylaxsystems/credible-std).
 - Update `remappings.txt` with:
-  - `credible-std/=lib/credible-std/src/`
-  - `forge-std/=lib/forge-std/src/`
-- Credible cheatcodes (`ph.*`) are documented in phylax-docs at `/credible/cheatcodes-overview` and `/credible/cheatcodes-reference`; use `credible-std/src/PhEvm.sol` for the exact interface.
+  - `credible-std/=lib/credible-std/src/` (https://github.com/phylaxsystems/credible-std)
+  - `forge-std/=lib/forge-std/src/` (https://github.com/foundry-rs/forge-std)
+- Credible cheatcodes (`ph.*`) are documented at https://docs.phylax.systems/credible/cheatcodes-overview and https://docs.phylax.systems/credible/cheatcodes-reference; use `credible-std/src/PhEvm.sol` in https://github.com/phylaxsystems/credible-std for the exact interface.
+- Credible Layer overview: https://docs.phylax.systems/credible/credible-introduction.
 
 ```solidity
 contract MyAssertion is Assertion {
@@ -59,6 +60,8 @@ contract MyAssertion is Assertion {
 
 ## Implementation Checklist
 - **Triggers**: use the narrowest possible trigger; avoid global triggers (`registerCallTrigger(fn)` or `registerStorageChangeTrigger(fn)` without a selector/slot).
+- **One Trigger, One Assertion**: avoid multi-selector dispatchers; register each selector to its own assertion function and reuse shared helpers.
+- **Interface Clarity**: use selectors from the interface that declares the function; if the adopter inherits it (e.g., ERC20/4626), call that out so the trigger source is obvious.
 - **Pre/Post**: call `forkPreTx()` only when needed; default is post-state.
 - **Call-Scoped Checks**: use `getCallInputs` + `forkPreCall`/`forkPostCall` for per-call invariants.
 - **Call Input Shape**: `CallInputs.input` contains args only (selector is stripped). Decode args directly; if you need `msg.data` (e.g., timelock keys), rebuild with `abi.encodePacked(selector, input)`.
@@ -83,6 +86,7 @@ contract MyAssertion is Assertion {
 
 ## Rationalizations to Reject
 - "Use getAllCallInputs everywhere." It can double-count proxy calls.
+- "Many selectors can share one assertion dispatcher." It hurts gas and makes debugging harder.
 - "I can ignore nested calls." Batched flows are common and must be handled.
 - "Events are enough." If events can be skipped, back them with state checks.
 - "We can rely on storage layout guesses." Always derive slots from layout.

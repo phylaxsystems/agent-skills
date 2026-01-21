@@ -40,10 +40,12 @@ Always output:
 - Passing assertions persist state changes; failing assertions revert and roll back state.
 - For constructor args in tests, use `abi.encodePacked(type(MyAssertion).creationCode, abi.encode(args))`.
 - Test both passing and failing paths with `vm.expectRevert`.
+- Add at least one failing test per assertion function; use mocks, `vm.store`, or harness contracts when the protocol prevents invalid state.
 - Add batch helper contracts for multi-operation transactions.
 - If you must use fallback-based batches, call `address(batch).call("")` and assert on the `success` flag.
 - Consider property-based testing (Echidna) for state invariants.
-- For Forge cheatcodes (`vm.*`), see the Forge Book cheatcodes page and `forge-std/src/Vm.sol`; for Credible testing cheats (`cl.*`), see `credible-std/src/CredibleTest.sol` plus `/credible/testing-assertions` and `/credible/cheatcodes-reference` in phylax-docs.
+- For Forge cheatcodes (`vm.*`), see https://getfoundry.sh/forge/tests/cheatcodes and `forge-std/src/Vm.sol` in https://github.com/foundry-rs/forge-std; for Credible testing cheats (`cl.*`), see `credible-std/src/CredibleTest.sol` in https://github.com/phylaxsystems/credible-std plus https://docs.phylax.systems/credible/testing-assertions and https://docs.phylax.systems/credible/cheatcodes-reference.
+- Credible Layer overview: https://docs.phylax.systems/credible/credible-introduction.
 - <u>Use `pcl test` for assertion tests because it includes the `cl.addAssertion` cheatcode; use `forge test` only for regular protocol tests.</u>
 - `pcl test` accepts `forge test` flags (fuzzing, verbosity), but may lag Forge versions.
 - Tests are Solidity functions starting with `test`; convention is `test/*.t.sol`.
@@ -64,6 +66,7 @@ Always output:
 
 ## Rationalizations to Reject
 - "One passing test is enough." Assertions must also fail on violations.
+- "The protocol already reverts, so negative tests are pointless." Assertions still need a failing path.
 - "Gas limits are a production problem." Exceeding 300k drops valid txs.
 - "Fuzzing is optional." It finds edge cases that manual tests miss.
 
