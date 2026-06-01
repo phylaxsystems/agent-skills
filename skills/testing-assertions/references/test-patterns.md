@@ -1,12 +1,14 @@
 # Test Patterns
 
 ## Registering Assertions
-- `cl.assertion({ adopter, createData, fnSelector });` runs on the next transaction only.
+- `cl.assertion(adopter, createData, fnSelector)` runs on the next monitored transaction only. Named arguments are also fine when supported by the compiler.
 - Register again for each test action.
 - Only one assertion function can be registered at a time; test functions in isolation.
 - Put all setup before `cl.assertion()`; the very next call consumes it.
 - The next call must match a trigger registered for `fnSelector`, or the assertion will not execute.
 - Passing assertions persist state changes; failing assertions revert and roll back state.
+- Build `createData` with `abi.encodePacked(type(MyAssertion).creationCode, abi.encode(constructorArgs...))`.
+- Do not arm assertions in smoke tests that only deploy contracts and do not execute a monitored call.
 
 ## Profiles
 - Use `FOUNDRY_PROFILE=assertions` (or unit/fuzz/backtest profiles) to isolate assertion builds.
@@ -40,6 +42,7 @@
 Well-implemented protocols prevent invalid states, making it impossible to test assertion failure paths against the real contract. Use mocks to verify assertions catch violations:
 - Build minimal mock contracts that can be forced into invalid states (e.g., a mock vault that allows unauthorized fee changes).
 - Use harness contracts that expose internal setters for testing.
+- Prefer one broken mode per invariant so each failing test explains exactly which property tripped.
 - This is expected behavior: if you cannot trigger an assertion failure against the real protocol, that's a sign the protocol is secure—but you still need to verify the assertion logic works.
 
 ## Fuzzing
@@ -61,7 +64,7 @@ Well-implemented protocols prevent invalid states, making it impossible to test 
 - Use one backtest per assertion selector to isolate failures.
 
 ## PCL Test Parity
-- `pcl test` is a fork of `forge test` with largely identical flags and behavior, but it adds `cl.addAssertion` for assertion tests.
+- `pcl test` behaves like `forge test` for flags and test selection, but it runs the Credible assertion execution path required by `CredibleTest`.
 - Use `pcl test` for assertions and reserve `forge test` for regular protocol tests.
 - Use `forge-std/Test` for available helpers and cheatcodes.
 - Refer to the Forge Book for detailed cheatcode behavior and test flags.

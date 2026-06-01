@@ -22,12 +22,18 @@ Run `pcl` commands from the repo root so Foundry picks up the `assertions` profi
 - `pcl config show` inspects saved auth and pending submissions.
 
 ## Test Parity Notes
-- `pcl test` behaves like `forge test` (same flags, fuzzing, verbosity) but adds `cl.addAssertion` for assertion tests.
+- `pcl test` behaves like `forge test` for common flags, fuzzing, verbosity, and test selection, but it runs the Credible assertion execution path needed by `CredibleTest`.
 - Use `pcl test` for assertions and reserve `forge test` for regular protocol tests.
 - `pcl` can lag Forge versions; confirm new flags before relying on them.
 - Use `forge-std/Test` for available helpers and cheatcodes.
 - Refer to the Forge Book for cheatcode semantics and testing flags.
 - Tests are any functions starting with `test`; conventionally in `test/*.t.sol`.
+
+## Local E2E Shape
+- Import `CredibleTest` and arm one assertion function immediately before the monitored external call.
+- Use `cl.assertion(adopter, createData, fnSelector)` with `createData = abi.encodePacked(type(MyAssertion).creationCode, abi.encode(args...))`.
+- Keep one assertion, one monitored call, and one expected result per behavior test.
+- Add an honest passing path and a malicious/failing path for each high-risk assertion function where feasible.
 
 ## Deployment Flow
 1. Deploy target contracts with `forge script`.

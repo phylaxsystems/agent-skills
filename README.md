@@ -5,6 +5,22 @@ Skills follow the Agent Skills format.
 
 ## Available Skills
 
+### write-protection-assertions
+Latest consolidated workflow from `agentic-engineering` for building Credible Layer protection assertions.
+
+Use when:
+- Classifying a protocol against the protection suite
+- Designing 2-5 high-signal external-state invariants
+- Implementing and validating assertion examples with `pcl test`
+
+### credible-assertion-integration-tests
+Assertion-driven integration testing workflow for Credible SDK, `credible-std`, executor, sidecar, and assertion-verification changes.
+
+Use when:
+- Changing precompiles, trigger semantics, assertion specs, or sidecar behavior
+- Proving behavior with real assertion bytecode
+- Choosing between executor, Foundry assertion-project, and LocalInstance tests
+
 ### mapping-invariants
 Intro workflow for mapping invariants before writing assertions.
 
@@ -19,10 +35,10 @@ Derive invariants and map them to precise triggers.
 Use when:
 - Scoping a new assertion suite
 - Translating protocol rules into invariants
-- Choosing call vs storage vs balance triggers
+- Choosing V2 function-call, tx-end, ERC20-change, cumulative-flow, or storage triggers
 
 ### implementing-assertions
-Implement assertion contracts with cheatcodes, traces, and storage access.
+Implement V2 assertion contracts with triggers, fork-aware reads, call context, traces, and storage access.
 
 Use when:
 - Writing assertion Solidity
@@ -30,7 +46,7 @@ Use when:
 - Handling call inputs, logs, or slots
 
 ### testing-assertions
-Build unit, fuzz, and harness tests for assertions.
+Build focused `CredibleTest`, fuzz, and harness tests for assertions.
 
 Use when:
 - Writing `CredibleTest` tests

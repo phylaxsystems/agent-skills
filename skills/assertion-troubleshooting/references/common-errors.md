@@ -14,7 +14,7 @@
 
 ## Wrong Cheatcode
 - Cause: using `vm.load()` in assertions.
-- Fix: use `ph.load()`.
+- Fix: use `ph.loadStateAt(...)` for V2 fork-aware reads, or `ph.load(...)` only when working with legacy examples.
 
 ## Selector Mismatch
 - Cause: trigger selector does not match called function.
@@ -22,11 +22,15 @@
 
 ## Call Input Double-Counting
 - Cause: `getAllCallInputs()` includes proxy + delegate calls.
-- Fix: use `getCallInputs()` or `getDelegateCallInputs()`.
+- Fix: use V2 `ph.context()` for the triggering call when possible; otherwise use `getCallInputs()` or `getDelegateCallInputs()` deliberately and dedupe proxy paths.
 
 ## Call Input Decode Reverts
-- Cause: `CallInputs.input` excludes the selector; decoding with a selector offset reverts.
-- Fix: decode args directly; if you need `msg.data`, rebuild with `abi.encodePacked(selector, input)`.
+- Cause: the decode assumes the wrong input shape.
+- Fix: verify the API. `ph.callinputAt(callId)` returns raw calldata including the selector, so strip the first 4 bytes before `abi.decode`. For legacy helpers, check the target repo's `PhEvm.sol`.
+
+## ph.context Reverts
+- Cause: `ph.context()` was called outside an assertion fired by `registerFnCallTrigger`.
+- Fix: use `registerFnCallTrigger(fn, selector)` for per-call assertions or remove `ph.context()` from tx-end/storage/ERC20-change assertions.
 
 ## Internal Calls Not Traced
 - Cause: internal Solidity calls are not traced.
@@ -63,31 +67,31 @@
 ## Anti-Pattern: Dispatcher Functions
 Routing many triggers through one assertion function hurts gas and debugging:
 ```solidity
-// ❌ WRONG: Many triggers → one dispatcher
+// Avoid: many triggers routed through one dispatcher.
 function triggers() external view override {
-    registerCallTrigger(this.assertionOwnership.selector, IVault.setFee.selector);
-    registerCallTrigger(this.assertionOwnership.selector, IVault.setGuardian.selector);
-    registerCallTrigger(this.assertionOwnership.selector, IVault.submitCap.selector);
+    registerFnCallTrigger(this.assertAdminMutation.selector, IVault.setFee.selector);
+    registerFnCallTrigger(this.assertAdminMutation.selector, IVault.setGuardian.selector);
+    registerFnCallTrigger(this.assertAdminMutation.selector, IVault.submitCap.selector);
 }
 ```
 ```solidity
-// ✅ CORRECT: One trigger → one assertion function
+// Prefer: one coherent property per assertion function.
 function triggers() external view override {
-    registerCallTrigger(this.assertionSetFee.selector, IVault.setFee.selector);
-    registerCallTrigger(this.assertionSetGuardian.selector, IVault.setGuardian.selector);
-    registerCallTrigger(this.assertionSubmitCap.selector, IVault.submitCap.selector);
+    registerFnCallTrigger(this.assertSetFeeBounds.selector, IVault.setFee.selector);
+    registerFnCallTrigger(this.assertGuardianChangeSafe.selector, IVault.setGuardian.selector);
+    registerFnCallTrigger(this.assertSubmitCapTimelock.selector, IVault.submitCap.selector);
 }
 ```
 
 ## Anti-Pattern: Mixed Interfaces
 Using selectors from different interfaces when one extends the other causes confusion:
 ```solidity
-// ❌ CONFUSING: Mixing IERC4626 and IVault
-registerCallTrigger(this.assertionDeposit.selector, IERC4626.deposit.selector);
-registerCallTrigger(this.assertionSubmitCap.selector, IVault.submitCap.selector);
+// Confusing: mixing IERC4626 and IVault
+registerFnCallTrigger(this.assertDeposit.selector, IERC4626.deposit.selector);
+registerFnCallTrigger(this.assertSubmitCap.selector, IVault.submitCap.selector);
 ```
 ```solidity
-// ✅ CLEAR: Consistent interface usage
-registerCallTrigger(this.assertionDeposit.selector, IVault.deposit.selector);
-registerCallTrigger(this.assertionSubmitCap.selector, IVault.submitCap.selector);
+// Clear: consistent interface usage
+registerFnCallTrigger(this.assertDeposit.selector, IVault.deposit.selector);
+registerFnCallTrigger(this.assertSubmitCap.selector, IVault.submitCap.selector);
 ```

@@ -163,22 +163,22 @@ Use these as starting points. Pick the smallest invariant that blocks the exploi
 ## Emergency Pause Modes
 - Example: when paused, only withdrawals allowed; balances cannot increase.
 - Observation: pre/post pause flag + balance deltas; call inputs for deposit/mint.
-- Triggers: call triggers on entrypoints or storage trigger on pause slot.
+- Triggers: function-call triggers on entrypoints or a specific storage trigger on the pause slot.
 
 ## AMM Math and Fee Invariants
 - Example: constant product maintained; tick stays within bounds; fee only from whitelist.
 - Observation: reserve product, tick state, fee slot changes.
-- Triggers: storage change on reserve/tick/fee slots; call triggers on swap/mint/burn.
+- Triggers: storage changes on reserve/tick/fee slots; function-call triggers on swap/mint/burn.
 
 ## ERC4626 Accounting
 - Example: assets/shares consistency; preview* matches actual; share value monotonic.
 - Observation: pre/post assets + supply + preview outputs; call inputs for deposit/withdraw.
-- Triggers: call triggers on ERC4626 entrypoints, optional storage trigger on totalSupply.
+- Triggers: function-call triggers on ERC4626 entrypoints, optional tx-end or storage trigger for totalSupply/accounting envelopes.
 
 ## Price Liveness and Deviation
 - Example: oracle updates within time window; price deviation within bps; intra-tx deviations.
-- Observation: post-state timestamp + per-call price checks via forkPostCall.
-- Triggers: call triggers on price update or risk-critical functions (borrow/liquidate).
+- Observation: post-state timestamp + per-call price checks via `_postCall(ctx.callEnd)`.
+- Triggers: function-call triggers on price update or risk-critical functions (borrow/liquidate).
 
 ## Intra-Tx Price Stability
 - Example: price must not deviate more than X bps from pre-tx during borrow/liquidate.
@@ -198,25 +198,25 @@ Use these as starting points. Pick the smallest invariant that blocks the exploi
 ## Drain and Outflow Limits
 - Example: per-tx outflow capped; large transfers only to whitelisted recipients.
 - Observation: pre/post balance delta; optional recipient allowlist via call inputs.
-- Triggers: balance trigger for ETH; call triggers on transfer/withdraw.
+- Triggers: ERC20-change trigger, cumulative outflow trigger, or function-call triggers on transfer/withdraw.
 
 ## Rounding and Proportionality
 - Example: withdrawals reduce balances proportional to shares burned.
 - Observation: per-call pre/post balances with dynamic tolerance (bps + min 1 wei).
-- Triggers: call triggers on withdraw/redeem; use forkPreCall/forkPostCall.
+- Triggers: function-call triggers on withdraw/redeem; use `_preCall(ctx.callStart)` and `_postCall(ctx.callEnd)`.
 
 ## First-Depositor and Exchange-Rate Floors
 - Example: minimum supply after market open; deposit must mint >0 shares.
 - Observation: pre/post totalSupply, exchange rate, and deposit amount.
-- Triggers: call triggers on deposit/mint or storage trigger on totalSupply slot.
+- Triggers: function-call triggers on deposit/mint or a specific storage trigger on totalSupply slot.
 - Use protocol-specific conversion formulas (e.g., virtual deposits) to avoid false positives.
 
 ## Phantom Collateral and Value Bounds
 - Example: reported collateral/AUM cannot exceed actual extractable value.
 - Observation: compare view-reported value vs real token balances + oracle rate.
-- Triggers: call triggers on valuation-sensitive entrypoints.
+- Triggers: function-call or tx-end triggers on valuation-sensitive entrypoints.
 
 ## Configuration and Parameter Bounds
 - Example: oracle staleness, price delta, emission multipliers, or timelock delays stay within safe ranges.
 - Observation: decode config setter inputs and validate post-state matches.
-- Triggers: call triggers on config setters; avoid global storage triggers when possible.
+- Triggers: function-call triggers on config setters; avoid global storage triggers when possible.

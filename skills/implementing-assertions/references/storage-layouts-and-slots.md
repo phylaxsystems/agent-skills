@@ -10,7 +10,7 @@
 - `StateChanges` helpers support mapping + offset variants; prefer them when available.
 
 ## Packed Fields
-- Packed values share a slot. Use bit masking or shifting after `ph.load`.
+- Packed values share a slot. Use bit masking or shifting after `ph.loadStateAt`.
 - Example: lower 128 bits for expiration, upper 128 for lifespan.
 - For packed uint40 epochs, extract with `uint40(uint256(slot) >> shift)` and guard underflows.
 
@@ -20,8 +20,9 @@
 - Use storage change triggers on the slot and validate call inputs for upgrade functions.
 
 ## Fork Awareness
-- `ph.load` reads from the current fork; call `forkPreTx()` or `forkPostTx()` first.
-- For intermediate values, use `getStateChanges*` or `forkPreCall`/`forkPostCall` around call ids.
+- Prefer `ph.loadStateAt(target, slot, fork)` with `_preTx()`, `_postTx()`, `_preCall(ctx.callStart)`, or `_postCall(ctx.callEnd)`.
+- Use `getStateChanges*` when the sequence of writes is itself the invariant.
+- Treat `ph.load` plus legacy fork switching as compatibility syntax for older examples.
 
 ## Unstructured Storage
 - For ERC-7201/namespace storage, derive the base slot by hashing the namespace string and applying the offset/mask.
