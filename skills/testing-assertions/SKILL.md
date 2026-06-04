@@ -1,28 +1,11 @@
 ---
 name: testing-assertions
-description: "Phylax Credible Layer assertions testing. Tests phylax/credible layer assertions with CredibleTest, fuzzing, and backtesting."
+description: "Phylax Credible Layer assertions testing. Tests assertions with CredibleTest, focused pcl E2E behavior tests, fuzzing, and backtesting."
 ---
 
 # Testing Assertions
 
 Build confidence that assertions block invalid transactions and allow valid ones.
-
-## Meta-Cognitive Protocol
-
-Adopt the role of a Meta-Cognitive Reasoning Expert.
-
-For every complex problem:
-1.DECOMPOSE: Break into sub-problems
-2.SOLVE: Address each with explicit confidence (0.0-1.0)
-3.VERIFY: Check logic, facts, completeness, bias
-4.SYNTHESIZE: Combine using weighted confidence
-5.REFLECT: If confidence <0.8, identify weakness and retry
-For simple questions, skip to direct answer.
-
-Always output:
-∙Clear answer
-∙Confidence level
-∙Key caveats
 
 ## When to Use
 
@@ -61,12 +44,11 @@ See `pcl-assertion-workflow` for full `foundry.toml` profile configuration.
 
 - Use `CredibleTest` and `cl.assertion(...)` to register a single assertion function for the next transaction.
 - **One assertion per test**: `cl.assertion(...)` registers exactly one assertion function. Create separate test functions for each assertion you want to verify.
-- `cl.assertion(...)` is consumed by the next external call (like `vm.prank`) and still requires a matching trigger.
-- Register full assertion contracts with `cl.addAssertion(...)` (usually in `setUp`) so `cl.validate(...)` can find them; this cheatcode is only available under `pcl test`.
+- `cl.assertion(...)` is consumed by the next monitored external call and still requires a matching trigger.
 - Passing assertions persist state changes; failing assertions revert and roll back state.
 - For constructor args in tests, use `abi.encodePacked(type(MyAssertion).creationCode, abi.encode(args))`.
-- Test both passing and failing paths with `vm.expectRevert`.
-- Add at least one failing test per assertion function; use simple mock contracts when the protocol prevents invalid state. Create minimal mocks with the same function signature that do the wrong thing (e.g., don't mark nullifier as spent, send wrong amount).
+- Test both honest passing paths and malicious/failing paths. Add at least one failing test per high-risk assertion function where feasible.
+- Use simple mock contracts when the protocol prevents invalid state. Prefer one mock knob per failure mode so each test trips exactly one invariant.
 - If `vm.expectRevert` fails due to call depth issues (e.g., "call didn't revert at a lower depth than cheatcode call depth"), use a low-level call pattern instead:
 
   ```solidity
@@ -79,13 +61,14 @@ See `pcl-assertion-workflow` for full `foundry.toml` profile configuration.
 - Consider property-based testing (Echidna) for state invariants.
 - For Forge cheatcodes (`vm.*`), see <https://getfoundry.sh/forge/tests/cheatcodes> and `forge-std/src/Vm.sol` in <https://github.com/foundry-rs/forge-std>; for Credible testing cheats (`cl.*`), see `credible-std/src/CredibleTest.sol` in <https://github.com/phylaxsystems/credible-std> plus <https://docs.phylax.systems/credible/testing-assertions> and <https://docs.phylax.systems/credible/cheatcodes-reference>.
 - Credible Layer overview: <https://docs.phylax.systems/credible/credible-introduction>.
-- <u>Use `pcl test` for assertion tests because it includes the `cl.addAssertion` cheatcode; use `forge test` only for regular protocol tests.</u>
+- Use `pcl test` for assertion behavior because it includes the Credible assertion execution path; use `forge test` only for regular protocol tests or compilation checks.
 - `pcl test` accepts `forge test` flags (fuzzing, verbosity), but may lag Forge versions.
 - Tests are Solidity functions starting with `test`; convention is `test/*.t.sol`.
 - Use `FOUNDRY_PROFILE=assertions` (or unit/fuzz/backtest profiles) for predictable config.
 - If proxy/delegatecall makes call inputs unreliable, add a log-based assertion variant and test both.
 - Organize assertions into modular contracts by domain (access control, timelock, caps). Split further if you hit `CreateContractSizeLimit`, and test each contract separately.
 - For timelocked actions, include `submit` + `skip` or `warp` in tests so the action can execute before assertions run.
+- Keep smoke tests separate from behavior tests. Deployment-only tests should not arm `cl.assertion` unless they execute a monitored call.
 
 ## Core Test Patterns
 
@@ -110,3 +93,5 @@ See `pcl-assertion-workflow` for full `foundry.toml` profile configuration.
 
 - [Test Patterns](references/test-patterns.md)
 - [PCL Test Parity](references/pcl-test-parity.md)
+- [E2E Testing With PCL](references/e2e-testing-with-pcl.md)
+- [Existing Assertion Lessons](references/existing-assertion-lessons.md)

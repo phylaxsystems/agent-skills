@@ -12,6 +12,7 @@ This repository contains agent skills for writing Phylax Credible Layer assertio
 skills/
   <skill-name>/
     SKILL.md
+    agents/openai.yaml  # optional UI metadata
     references/
 ```
 

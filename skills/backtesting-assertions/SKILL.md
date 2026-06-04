@@ -7,22 +7,6 @@ description: "Phylax Credible Layer assertions backtesting. Runs assertion backt
 
 Use Credible Layer backtesting to replay historical transactions with assertions enabled.
 
-## Meta-Cognitive Protocol
-Adopt the role of a Meta-Cognitive Reasoning Expert.
-
-For every complex problem:
-1.DECOMPOSE: Break into sub-problems
-2.SOLVE: Address each with explicit confidence (0.0-1.0)
-3.VERIFY: Check logic, facts, completeness, bias
-4.SYNTHESIZE: Combine using weighted confidence
-5.REFLECT: If confidence <0.8, identify weakness and retry
-For simple questions, skip to direct answer.
-
-Always output:
-∙Clear answer
-∙Confidence level
-∙Key caveats
-
 ## When to Use
 - You want to validate assertions against real mainnet transactions.
 - You are testing a known exploit block or incident transaction.
@@ -50,7 +34,7 @@ See `pcl-assertion-workflow` for the full profile configuration with `ffi = true
 - For large ranges, use a paid RPC to avoid rate limits; `useTraceFilter` reduces calls.
 - Use `forkByTxHash = true` only when debugging state-dependent failures.
 - Use `blockRange = 1` for a specific known exploit tx.
-- If your invariant is keyed by `msg.data` (timelocks), rebuild calldata from selector + args; call inputs exclude the selector.
+- If your invariant is keyed by calldata, verify the exact input shape for the API being used. `ph.callinputAt` returns raw calldata including the selector.
 - Interpret results: `PASS`, `NEEDS_REVIEW` (selector mismatch or replay failure), `ASSERTION_FAIL` (often false positives or gas), `UNKNOWN_ERROR` (RPC or unexpected).
 - If many `NEEDS_REVIEW`, the selector/target does not match or you need `forkByTxHash`.
 
@@ -62,3 +46,4 @@ See `pcl-assertion-workflow` for the full profile configuration with `ffi = true
 
 ## References
 - [Backtesting Template](references/backtesting-template.md)
+- [E2E Testing With PCL](references/e2e-testing-with-pcl.md)

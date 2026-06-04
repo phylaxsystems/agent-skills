@@ -1,0 +1,4 @@
+interface:
+  display_name: "Write Protection Assertions"
+  short_description: "Spec, implement, and test protection-suite assertions."
+  default_prompt: "Use $write-protection-assertions to create assertion spec cards, implement examples, and validate them with pcl test."

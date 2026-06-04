@@ -1,6 +1,6 @@
 # PCL Test Parity
 
-`pcl test` is a fork of `forge test` with largely identical flags and behavior, but it adds the `cl.addAssertion` cheatcode required for assertion tests. Use `pcl test` for assertions and reserve `forge test` for regular protocol tests; note `pcl` can lag Forge versions so newer flags may be missing.
+`pcl test` behaves like `forge test` for common flags and test selection, but it also runs the Credible assertion execution path required by `CredibleTest`. Use `pcl test` for assertion behavior and reserve `forge test` for regular protocol tests or compile-only checks; note `pcl` can lag Forge versions so newer flags may be missing.
 
 ## Test Discovery
 - Any Solidity function starting with `test` is a test.

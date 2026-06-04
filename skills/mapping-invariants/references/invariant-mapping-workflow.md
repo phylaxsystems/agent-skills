@@ -38,18 +38,19 @@ Decide how to observe each invariant:
 - **State**: pre/post values, storage slots, mapping entries.
 - **Logs**: Transfer/Withdraw/Borrow/Deposit events for accounting.
 - **Call inputs**: decode parameters and verify outcomes.
-- **Call frames**: per‑call checks with `forkPreCall`/`forkPostCall`.
+- **Call frames**: per-call checks with V2 call context plus `_preCall(ctx.callStart)` and `_postCall(ctx.callEnd)`.
 - **Slots**: unstructured storage and packed fields when no getter exists.
 - **Downstream calls**: verify that external calls actually occur.
 - **Packed calldata**: decode using protocol‑specific packing logic (assetId, amount, mode).
 
 ## Step 5: Trigger Plan
-- **Call triggers**: for specific operations (withdraw, liquidate, upgrade).
-- **Storage triggers**: for slots that can change via multiple paths.
-- **Balance triggers**: for ETH outflows.
+- **Function-call triggers**: for specific operations (withdraw, liquidate, upgrade).
+- **Transaction-end triggers**: for whole-transaction custody, accounting, oracle, and protected-state envelopes.
+- **ERC20-change triggers**: for token custody/reserve surfaces where selectors are incomplete.
+- **Cumulative-flow triggers**: for rolling-window inflow or outflow limits.
+- **Storage triggers**: for specific slots that can change via multiple paths.
 - **Before hooks**: trigger on guard/validator functions that pre‑check actions.
 - **Router batches**: plan for nested calldata decoding and call dedupe.
-- **Global postconditions**: if invariant applies after any action, trigger at the chokepoint.
 
 ## Step 6: Coverage Matrix
 For each invariant:
