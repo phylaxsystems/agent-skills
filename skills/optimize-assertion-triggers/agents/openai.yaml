@@ -1,0 +1,4 @@
+interface:
+  display_name: "Optimize Assertion Triggers"
+  short_description: "Reduce assertion trigger noise safely."
+  default_prompt: "Use $optimize-assertion-triggers to review an existing Credible assertion and narrow its triggers without weakening the invariant."
