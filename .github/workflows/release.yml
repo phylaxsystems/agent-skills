@@ -1,0 +1,95 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing semver tag to release"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: Build release artifact
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+
+      - name: Verify package version matches release tag
+        run: |
+          package_version="$(node -p "require('./package.json').version")"
+          release_version="${GITHUB_REF_NAME}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            release_version="${{ inputs.tag }}"
+          fi
+          if [ "$package_version" != "$release_version" ]; then
+            echo "package.json version $package_version does not match release tag $release_version"
+            exit 1
+          fi
+
+      - name: Build manifest
+        run: npm run build:manifest
+
+      - name: Test
+        run: npm test
+
+      - name: Pack release artifact
+        run: npm pack --json
+
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-skills-package
+          path: "*.tgz"
+          if-no-files-found: error
+
+  release-github:
+    name: Create GitHub release
+    needs: package
+    permissions:
+      contents: write
+    uses: phylaxsystems/actions/.github/workflows/release-github.yaml@main
+    with:
+      tag: ${{ inputs.tag || github.ref_name }}
+      artifact_name: agent-skills-package
+
+  publish-npm:
+    name: Publish to npm
+    needs: package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Build manifest
+        run: npm run build:manifest
+
+      - name: Publish
+        run: npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

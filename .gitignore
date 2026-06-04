@@ -10,6 +10,10 @@ states/
 *.dbg.json
 *.tsbuildinfo
 
+# Node / npm packaging
+node_modules/
+*.tgz
+
 # Optional
 .env
 .env.local

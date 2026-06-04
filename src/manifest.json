@@ -1,0 +1,106 @@
+{
+  "skills": {
+    "assertion-troubleshooting": {
+      "basePath": "skills/assertion-troubleshooting",
+      "description": "Phylax Credible Layer assertions troubleshooting. Diagnoses common assertion failures and non-triggering issues. Use when phylax/credible layer assertions fail unexpectedly or do not execute.",
+      "files": [
+        "SKILL.md",
+        "references/common-errors.md"
+      ]
+    },
+    "backtesting-assertions": {
+      "basePath": "skills/backtesting-assertions",
+      "description": "Phylax Credible Layer assertions backtesting. Runs assertion backtests against historical transactions. Use when validating phylax/credible layer assertions on real chain data or known exploits.",
+      "files": [
+        "SKILL.md",
+        "references/backtesting-template.md",
+        "references/e2e-testing-with-pcl.md"
+      ]
+    },
+    "credible-assertion-integration-tests": {
+      "basePath": "skills/credible-assertion-integration-tests",
+      "description": "Use when changing credible-sdk assertion-executor, credible-std, assertion-verification, or sidecar behavior that should be proven with a new assertion-driven test, especially for new precompiles, trigger semantics, assertion specs, or LocalInstance-based integration coverage.",
+      "files": [
+        "SKILL.md",
+        "references/credible-sdk-assertion-testing.md"
+      ]
+    },
+    "designing-assertions": {
+      "basePath": "skills/designing-assertions",
+      "description": "Phylax Credible Layer assertions design. Designs high-signal invariants, classifies protocol protection surfaces, and maps them to V2 triggers before implementation.",
+      "files": [
+        "SKILL.md",
+        "references/assertion-spec-card-template.md",
+        "references/invariant-patterns.md",
+        "references/protection-assertion-guide.md",
+        "references/trigger-mapping.md"
+      ]
+    },
+    "implementing-assertions": {
+      "basePath": "skills/implementing-assertions",
+      "description": "Phylax Credible Layer assertions implementation. Implements V2 Credible Layer assertion contracts using triggers, fork-aware precompiles, call context, and focused helper structure.",
+      "files": [
+        "SKILL.md",
+        "references/cheatcodes-and-traces.md",
+        "references/event-parsing.md",
+        "references/existing-assertion-lessons.md",
+        "references/storage-layouts-and-slots.md",
+        "references/token-integration-safety.md",
+        "references/tolerance-and-rounding.md",
+        "references/v2-precompiles-and-triggers.md"
+      ]
+    },
+    "mapping-invariants": {
+      "basePath": "skills/mapping-invariants",
+      "description": "Phylax Credible Layer assertions invariant mapping. Use when starting a protocol to map invariants before writing phylax/credible layer assertions or tests.",
+      "files": [
+        "SKILL.md",
+        "references/invariant-mapping-workflow.md",
+        "references/lending-invariant-checklist.md",
+        "references/protocol-examples.md"
+      ]
+    },
+    "optimize-assertion-triggers": {
+      "basePath": "skills/optimize-assertion-triggers",
+      "description": "Optimize Credible Layer/PCL Solidity assertion trigger selection for existing or newly edited assertions. Use when an assertion fires too often, relies on broad onFnCall/registerFnCallTrigger usage, needs lower execution overhead, or needs a trigger review that preserves the same security invariant while preferring narrower triggers such as onTxEnd/registerTxEndTrigger, ERC20-change triggers, storage-change triggers, or cumulative flow triggers where appropriate.",
+      "files": [
+        "SKILL.md",
+        "agents/openai.yaml"
+      ]
+    },
+    "pcl-assertion-workflow": {
+      "basePath": "skills/pcl-assertion-workflow",
+      "description": "Phylax Credible Layer assertions workflow. Guides the end-to-end PCL workflow (project setup, testing, store/submit, and deploy). Use when setting up or deploying phylax/credible layer assertions with the CLI and dApp.",
+      "files": [
+        "SKILL.md",
+        "references/e2e-testing-with-pcl.md",
+        "references/workflow-steps.md"
+      ]
+    },
+    "testing-assertions": {
+      "basePath": "skills/testing-assertions",
+      "description": "Phylax Credible Layer assertions testing. Tests assertions with CredibleTest, focused pcl E2E behavior tests, fuzzing, and backtesting.",
+      "files": [
+        "SKILL.md",
+        "references/e2e-testing-with-pcl.md",
+        "references/existing-assertion-lessons.md",
+        "references/pcl-test-parity.md",
+        "references/test-patterns.md"
+      ]
+    },
+    "write-protection-assertions": {
+      "basePath": "skills/write-protection-assertions",
+      "description": "Create or update high-quality Credible Layer Solidity example assertions and E2E tests for a protocol repository by classifying the protocol against the existing protection suite, using bundled V2 trigger/precompile digests, organizing examples under the right protection category, and prioritizing a small set of focused external-state invariants that are not already enforced by protocol require statements. Use when the user provides or references a GitHub/protocol repo and asks for example assertions, protection-suite coverage, invariant design, pcl test E2E validation, or assertion workflow guidance.",
+      "files": [
+        "SKILL.md",
+        "agents/openai.yaml",
+        "references/assertion-spec-card-template.md",
+        "references/e2e-testing-with-pcl.md",
+        "references/existing-assertion-lessons.md",
+        "references/protection-assertion-guide.md",
+        "references/v2-precompiles-and-triggers.md"
+      ]
+    }
+  },
+  "agents": {}
+}
