@@ -87,13 +87,44 @@ Use when:
 
 ## Installation
 
-The easiest option is the `npx` installer:
+### npm (recommended)
+
+The skills are published to npm as [`@phylax-systems/agent-skills`](https://www.npmjs.com/package/@phylax-systems/agent-skills) with a bundled installer CLI. No clone required:
 
 ```bash
-npx add-skill phylaxsystems/agent-skills
+# Interactive: pick skills and target agents
+npx @phylax-systems/agent-skills install
+
+# Install everything into all detected agents (Claude Code, Codex, opencode)
+npx @phylax-systems/agent-skills install all
+
+# Install one skill into specific agents
+npx @phylax-systems/agent-skills install optimize-assertion-triggers --agent claude-code --agent codex
+
+# List available skills
+npx @phylax-systems/agent-skills list
 ```
 
-Manual install (copy the skill folders into your agent skills directory):
+Targets resolve automatically:
+
+| Agent | Install location |
+| --- | --- |
+| `claude-code` | `~/.claude/skills/` |
+| `codex` | `$CODEX_HOME/skills/` (or `~/.codex/skills/`) |
+| `opencode` | `~/.config/opencode/skills/` |
+
+Use `--dir <path>` to install under a custom root and `--force` to overwrite existing skills.
+
+You can also install globally:
+
+```bash
+npm install -g @phylax-systems/agent-skills
+agent-skills install all
+```
+
+### Manual install
+
+Copy the skill folders into your agent skills directory:
 
 ```bash
 # Claude Code
@@ -119,4 +150,33 @@ Backtest this assertion on the exploit block
 
 Each skill contains:
 - `SKILL.md` - instructions for the agent
+- `agents/openai.yaml` - Codex UI metadata (optional)
 - `references/` - supporting docs (optional)
+
+## Development
+
+The installer bundles every folder under `skills/` from a generated manifest.
+
+```bash
+npm install        # no runtime dependencies; installs dev tooling only
+npm run build:manifest   # regenerate src/manifest.json from skills/
+npm test           # build manifest + run the test suite
+```
+
+After adding or editing a skill, regenerate and commit `src/manifest.json`
+(`npm run build:manifest`). CI fails if the committed manifest is stale.
+
+### Publishing
+
+Releases publish to npm automatically. Bump `version` in `package.json`, then
+push a matching semver tag:
+
+```bash
+git tag 0.1.0
+git push origin 0.1.0
+```
+
+The release workflow verifies the tag matches `package.json`, runs the tests,
+creates a GitHub release, and runs `npm publish --access public`. Publishing
+requires an `NPM_TOKEN` repository secret with publish rights to the
+`@phylax-systems` org.
