@@ -45,6 +45,14 @@ Use when:
 - Optimizing or refactoring assertion logic
 - Handling call inputs, logs, or slots
 
+### optimize-assertion-triggers
+Narrow assertion trigger selection without weakening the protected invariant.
+
+Use when:
+- An assertion fires too often or relies on broad `onFnCall`/`registerFnCallTrigger` coverage
+- Reviewing or refactoring `triggers()` to lower execution overhead
+- Preferring `onTxEnd`, ERC20-change, storage-change, or cumulative-flow triggers where they cover the same paths
+
 ### testing-assertions
 Build focused `CredibleTest`, fuzz, and harness tests for assertions.
 
