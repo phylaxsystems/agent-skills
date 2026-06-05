@@ -36,3 +36,12 @@ skills/
 
 - Link from `SKILL.md` to specific files in `references/`.
 - Avoid reference chains (references should not link to other references).
+
+## Packaging
+
+- Skills are published to npm as `@phylax-systems/agent-skills` with a bundled
+  installer CLI (`src/cli.mjs`).
+- The installer reads `src/manifest.json`, which is generated from `skills/` by
+  `scripts/generate-manifest.mjs`.
+- After adding or editing any skill, run `npm run build:manifest` and commit the
+  updated `src/manifest.json`. CI fails if it is stale.

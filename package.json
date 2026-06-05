@@ -1,0 +1,32 @@
+{
+  "name": "@phylax-systems/agent-skills",
+  "version": "0.1.0",
+  "description": "Agent skills for writing Phylax Credible Layer assertions, installable into Claude Code, Codex, and opencode.",
+  "private": false,
+  "type": "module",
+  "bin": {
+    "agent-skills": "src/cli.mjs"
+  },
+  "files": [
+    "src",
+    "skills",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build:manifest": "node scripts/generate-manifest.mjs",
+    "pretest": "npm run build:manifest",
+    "test": "node --test test/*.test.mjs",
+    "prepack": "npm run build:manifest"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/phylaxsystems/agent-skills.git"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  }
+}
