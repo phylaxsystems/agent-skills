@@ -1,0 +1,4 @@
+interface:
+  display_name: "PCL Invalidation Deep Dive"
+  short_description: "Investigate PCL invalidations with production-style triage"
+  default_prompt: "Use $pcl-invalidation-deep-dive to investigate a new PCL invalidation and produce a production-style triage report that explains the transaction, assertion, verdict, next action, trace readability, source/decompiler context, and protected value."

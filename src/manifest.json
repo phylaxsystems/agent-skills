@@ -77,6 +77,17 @@
         "references/workflow-steps.md"
       ]
     },
+    "pcl-invalidation-deep-dive": {
+      "basePath": "skills/pcl-invalidation-deep-dive",
+      "description": "Run local agentic triage for Phylax PCL/Credible Layer invalidations, new protected-loss events, blocked exploit attempts, and \"we got hacked\" requests by using the pcl CLI plus local JSON-RPC/explorer APIs to explain what a dropped transaction attempted, why the assertion invalidated it, whether it looks malicious, what was protected, and what the user should do next. Use when a user mentions pcl incidents, invalidations, failed traces, protected value, agentic triage, dropped transactions, 0x-settler, AllowanceAssertion, LineaSettler, blocked drains, new invalidating transactions, or asks what would have been drained if Credible Layer was not in place.",
+      "files": [
+        "SKILL.md",
+        "agents/openai.yaml",
+        "references/etl-pipeline.md",
+        "scripts/collect_contract_context.py",
+        "scripts/normalize_pcl_trace.py"
+      ]
+    },
     "testing-assertions": {
       "basePath": "skills/testing-assertions",
       "description": "Phylax Credible Layer assertions testing. Tests assertions with CredibleTest, focused pcl E2E behavior tests, fuzzing, and backtesting.",

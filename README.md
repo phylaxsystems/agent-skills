@@ -77,6 +77,14 @@ Use when:
 - Storing and submitting assertions
 - Deploying via the dApp
 
+### pcl-invalidation-deep-dive
+Local production-style triage for PCL/Credible Layer invalidations, blocked exploit attempts, failed traces, and protected-value estimates.
+
+Use when:
+- A user gets a new invalidation and needs to know what the dropped transaction attempted
+- Estimating actual loss, unique protected value, repeated blocked volume, or failed-trace gaps
+- Investigating `0x-settler`, `AllowanceAssertion`, `LineaSettler`, allowance drains, or blocked exploit attempts
+
 ### assertion-troubleshooting
 Diagnose non-triggering assertions and common failures.
 
