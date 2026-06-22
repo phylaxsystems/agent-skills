@@ -60,6 +60,25 @@ Identity keys:
 - Treat `transaction_hash` as evidence, not the primary row key. Repeated simulated invalidations can reuse the same hash while differing by PCL tx id, block number, incident window, or trace status.
 - Keep block number with every row; the same calldata/hash can be evaluated at different block contexts.
 
+## Stage 1A: Capability Preflight
+
+Before source collection or root-cause analysis, run the local requirements gate for the target chain:
+
+```bash
+scripts/check_triage_requirements.py --chain-id <chain-id> --require-explorer
+scripts/check_triage_requirements.py --chain-id <chain-id> --require-explorer --require-decompiler
+```
+
+Use the first command for normal triage. Use the second command when unverified code, created/transient contracts, or source-dependent RCA makes decompiler access necessary.
+
+Exit code `2` means local requirements are missing. Surface the report verbatim to the operator because it explains:
+
+- which capability is missing
+- why it is required
+- which flag or environment variable can satisfy it
+
+Do not continue into root-cause analysis after a failed preflight unless the user explicitly accepts a degraded report. When continuing in degraded mode, list the missing capability in `Open Gaps and Confidence`.
+
 ## Stage 2: Local Context Packet
 
 Build a local context packet before reasoning. Store large artifacts as files under `/tmp/<project-or-incident>/` or the current workspace.
@@ -245,6 +264,8 @@ scripts/collect_contract_context.py \
 ```
 
 The helper extracts trace addresses, fetches runtime bytecode, tries Etherscan V2 `getsourcecode`, tries Sourcify verified contract lookup, and writes `contract_context_manifest.json`. Review its `decompiler_targets` before writing the RCA.
+
+By default the helper refuses to run without JSON-RPC because `eth_getCode` is required for contract/EOA classification, bytecode capture, and decompiler target discovery. If RPC is missing, it exits with a requirements block that names the chain id and the accepted configuration options. Use `--allow-missing-rpc` only for an explicitly degraded source-only packet, and then record the missing RPC as a confidence gap.
 
 If a decompiler target has `bytecode_path: null` because the address was created only in the simulated trace, recover init/runtime bytecode from one of:
 
@@ -669,6 +690,7 @@ After running the skill on live invalidations, review the result before reportin
 
 - Did the commands use the current Brew `pcl` and record `pcl --version`?
 - Did PCL auth and platform health pass?
+- Did the capability preflight run, and did the report record which RPC/explorer/decompiler capabilities were present or missing?
 - Did the run include both a failed/no-trace case and completed traces when available?
 - Were list/export artifacts treated as indexes rather than full evidence?
 - Were incident rows keyed by `(incident_id, pcl_tx_id)`, not hash alone?

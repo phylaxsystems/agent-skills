@@ -23,6 +23,22 @@ from typing import Any
 ANSI_RE = re.compile(r"\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
 ADDRESS_RE = re.compile(r"0x[a-fA-F0-9]{40}")
 CREATED_RE = re.compile(r"\bnew\b[^@\n]*@(?P<address>0x[a-fA-F0-9]{40})")
+ALCHEMY_HOSTS = {
+    "1": "eth-mainnet.g.alchemy.com",
+    "10": "opt-mainnet.g.alchemy.com",
+    "137": "polygon-mainnet.g.alchemy.com",
+    "42161": "arb-mainnet.g.alchemy.com",
+    "8453": "base-mainnet.g.alchemy.com",
+    "59144": "linea-mainnet.g.alchemy.com",
+}
+CHAIN_RPC_ENV = {
+    "1": "ETH_RPC_URL",
+    "10": "OPTIMISM_RPC_URL",
+    "137": "POLYGON_RPC_URL",
+    "42161": "ARBITRUM_RPC_URL",
+    "8453": "BASE_RPC_URL",
+    "59144": "LINEA_RPC_URL",
+}
 
 
 def strip_ansi(text: str) -> str:
@@ -122,25 +138,64 @@ def sourcify_verified(status: int | None, data: Any) -> bool:
 
 
 def derived_rpc_url(chain_id: str) -> str | None:
-    if os.getenv("LINEA_RPC_URL") and chain_id == "59144":
-        return os.getenv("LINEA_RPC_URL")
+    chain_env = CHAIN_RPC_ENV.get(chain_id)
+    if chain_env and os.getenv(chain_env):
+        return os.getenv(chain_env)
     if os.getenv("RPC_URL"):
         return os.getenv("RPC_URL")
     alchemy_key = os.getenv("ALCHEMY_API_KEY")
     if not alchemy_key:
         return None
-    alchemy_hosts = {
-        "1": "eth-mainnet.g.alchemy.com",
-        "10": "opt-mainnet.g.alchemy.com",
-        "137": "polygon-mainnet.g.alchemy.com",
-        "42161": "arb-mainnet.g.alchemy.com",
-        "8453": "base-mainnet.g.alchemy.com",
-        "59144": "linea-mainnet.g.alchemy.com",
-    }
-    host = alchemy_hosts.get(chain_id)
+    host = ALCHEMY_HOSTS.get(chain_id)
     if not host:
         return None
     return f"https://{host}/v2/{alchemy_key}"
+
+
+def rpc_requirement_message(chain_id: str) -> str:
+    chain_env = CHAIN_RPC_ENV.get(chain_id) or "<CHAIN>_RPC_URL"
+    alchemy_note = (
+        "ALCHEMY_API_KEY can derive an RPC URL for this chain"
+        if chain_id in ALCHEMY_HOSTS
+        else "ALCHEMY_API_KEY cannot derive an RPC URL for this unsupported chain id"
+    )
+    return "\n".join(
+        [
+            "Missing required JSON-RPC access for PCL invalidation triage.",
+            f"chain_id: {chain_id}",
+            "required_for:",
+            "- eth_getCode contract/EOA classification",
+            "- runtime bytecode capture for decompiler targets",
+            "- source/decompiler coverage checks before RCA",
+            "configure one of:",
+            "- --rpc-url <url>",
+            f"- {chain_env}",
+            "- RPC_URL",
+            f"- {alchemy_note}",
+            (
+                "Run scripts/check_triage_requirements.py --chain-id "
+                f"{chain_id} to see the full local requirements report."
+            ),
+            (
+                "Use --allow-missing-rpc only when explicitly accepting a degraded "
+                "source-only packet and list the missing RPC as a report gap."
+            ),
+        ]
+    )
+
+
+def validate_rpc_url(chain_id: str, rpc_url: str) -> str | None:
+    try:
+        expected = hex(int(chain_id))
+    except ValueError:
+        return f"chain_id must be a decimal EVM chain id; got {chain_id!r}"
+    try:
+        actual = rpc_call(rpc_url, "eth_chainId", [])
+    except Exception as exc:
+        return f"configured RPC did not answer eth_chainId: {exc}"
+    if str(actual).lower() != expected:
+        return f"configured RPC returned eth_chainId {actual}, expected {expected}"
+    return None
 
 
 def main() -> int:
@@ -153,14 +208,31 @@ def main() -> int:
     parser.add_argument("--rpc-url", default=None)
     parser.add_argument("--etherscan-api-key", default=os.getenv("ETHERSCAN_API_KEY"))
     parser.add_argument("--skip-sourcify", action="store_true")
+    parser.add_argument(
+        "--allow-missing-rpc",
+        action="store_true",
+        help="Continue without eth_getCode bytecode collection. Reports must list this as a degraded-mode gap.",
+    )
     args = parser.parse_args()
     rpc_url = args.rpc_url or derived_rpc_url(args.chain_id)
+    if not rpc_url and not args.allow_missing_rpc:
+        sys.stderr.write(rpc_requirement_message(args.chain_id) + "\n")
+        return 2
+    if rpc_url:
+        rpc_error = validate_rpc_url(args.chain_id, rpc_url)
+        if rpc_error:
+            sys.stderr.write(rpc_requirement_message(args.chain_id) + "\n")
+            sys.stderr.write(f"configured_rpc_error: {rpc_error}\n")
+            return 2
 
     files = [Path(file_name) for file_name in args.files]
     out_dir = Path(args.out_dir)
     addresses, created_addresses = extract_address_context(files)
     manifest: dict[str, Any] = {
         "chain_id": args.chain_id,
+        "rpc_required": True,
+        "rpc_configured": bool(rpc_url),
+        "rpc_requirement": None if rpc_url else rpc_requirement_message(args.chain_id),
         "address_count": len(addresses),
         "created_address_count": len(created_addresses),
         "created_addresses": sorted(created_addresses),

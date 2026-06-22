@@ -93,10 +93,13 @@ If no runner is available, execute the same phases sequentially. Do not let the 
    - Key rows by `(incident_id, invalidating_transaction.id)`. Do not dedupe incident coverage by transaction hash alone; repeated simulations can reuse a hash while differing by incident window, block number, PCL tx id, or trace status.
 
 4. **Assemble the local triage context**
+   - Run `scripts/check_triage_requirements.py --chain-id <chain-id> --require-explorer` before deep RCA. Add `--require-decompiler` when unverified code, transient contracts, or source gaps must be resolved for the answer.
+   - If the requirements preflight exits non-zero, stop and surface its output verbatim. Do not continue to a root-cause report until the missing RPC/explorer/decompiler capability is configured, unless the user explicitly accepts a degraded report.
    - Build a local evidence packet from PCL plus RPC/explorer data: transaction object, transaction execution trace, assertion execution trace, previous transaction from the sender, all touched contract addresses, created contracts, ABIs/source when available, token metadata, receipts/logs, and balance/allowance reads.
    - Fetch the previous transaction from the same sender before the invalidation block/hash using explorer account history or an equivalent RPC/indexer source. Save it as `previous_tx_<sender>.json`; if unavailable, list it as a gap because it can distinguish benign user flow, preparatory approvals, and multi-block exploit setup.
    - Treat contract source context as a required stage before root-cause analysis. Extract every address from transaction traces, assertion traces, transaction objects, created-contract lines, token proxy/implementation delegatecalls, and assertion/runtime helper calls.
    - Run `scripts/collect_contract_context.py --chain-id <chain-id> --out-dir contract_context trace_*.json` after traces are saved. Provide `--rpc-url` explicitly or rely on current env. It fetches bytecode, Etherscan V2 source, Sourcify source, and emits `contract_context_manifest.json` with unverified decompiler targets.
+   - The contract-context helper exits with the exact missing JSON-RPC requirement when no RPC is configured. Use `--allow-missing-rpc` only when explicitly accepting a degraded source-only packet, then list that as a confidence gap.
    - For contracts created inside a non-landed PCL simulation, `eth_getCode(latest)` may return no code. Treat these as transient created-contract gaps, then recover init/runtime bytecode from trace output, calldata, replay, or decompiler tooling before relying on that route for RCA.
    - For every code-bearing address, attach one of: verified source/ABI, Sourcify contract data, decompiled output, or a specific unresolved-source gap. Do not do root-cause analysis from labels alone when source/decompiled context is missing for an important touched contract.
    - Store large JSON artifacts under `/tmp` or the current workspace and summarize from files instead of pasting huge traces into the final answer.
@@ -216,6 +219,15 @@ Minimum useful environment:
 - Explorer API access for the target chain, such as Etherscan v2 or Lineascan.
 - `cast` from Foundry.
 - Optional decompiler access for unverified or transient contracts.
+
+Before RCA, run the requirement gate and treat failures as blocking:
+
+```bash
+scripts/check_triage_requirements.py --chain-id <chain-id> --require-explorer
+scripts/check_triage_requirements.py --chain-id <chain-id> --require-explorer --require-decompiler
+```
+
+The gate reports which capability is missing, why it is required, and which env var or flag can satisfy it. Surface that output directly instead of producing a low-confidence triage that hides missing RPC, verification, or decompiler access.
 
 ## Final Answer Shape
 
