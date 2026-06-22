@@ -47,6 +47,7 @@ RETURN_RE = re.compile(r"\[Return\]\s+(?P<value>0x[a-fA-F0-9]+|[0-9]+)")
 UUID_RE = re.compile(
     r"[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}"
 )
+TRACE_CONTENT_KEYS = ("transaction_trace_content", "assertion_trace_content", "trace_content")
 
 
 def strip_ansi(text: str) -> str:
@@ -69,19 +70,91 @@ def first_nested(obj: Any, key: str) -> Any:
     return None
 
 
-def trace_text_from_json(obj: Any) -> tuple[str, dict[str, Any]]:
-    tx = first_nested(obj, "invalidating_transaction") or {}
-    debug_trace = first_nested(obj, "debug_trace") or {}
-    if not debug_trace:
-        traces = first_nested(obj, "debug_traces")
-        if isinstance(traces, list) and traces:
-            debug_trace = traces[0]
+def all_nested(obj: Any, key: str) -> list[Any]:
+    found: list[Any] = []
+    if isinstance(obj, dict):
+        if key in obj:
+            found.append(obj[key])
+        for value in obj.values():
+            found.extend(all_nested(value, key))
+    elif isinstance(obj, list):
+        for value in obj:
+            found.extend(all_nested(value, key))
+    return found
 
+
+def trace_parts(debug_trace: dict[str, Any]) -> list[str]:
     parts = []
-    for key in ("transaction_trace_content", "assertion_trace_content", "trace_content"):
-        value = debug_trace.get(key) if isinstance(debug_trace, dict) else None
+    for key in TRACE_CONTENT_KEYS:
+        value = debug_trace.get(key)
         if value:
             parts.append(str(value))
+    return parts
+
+
+def debug_trace_candidates(obj: Any) -> list[dict[str, Any]]:
+    candidates: list[dict[str, Any]] = []
+
+    for value in all_nested(obj, "debug_trace"):
+        if isinstance(value, dict):
+            candidates.append(value)
+
+    for value in all_nested(obj, "debug_traces"):
+        if isinstance(value, list):
+            candidates.extend(item for item in value if isinstance(item, dict))
+        elif isinstance(value, dict):
+            candidates.append(value)
+
+    if isinstance(obj, dict) and any(obj.get(key) for key in TRACE_CONTENT_KEYS):
+        candidates.append(obj)
+
+    traces: list[dict[str, Any]] = []
+    seen: set[int] = set()
+    for candidate in candidates:
+        candidate_id = id(candidate)
+        if candidate_id in seen:
+            continue
+        seen.add(candidate_id)
+        traces.append(candidate)
+    return traces
+
+
+def debug_trace_summary(index: int, debug_trace: dict[str, Any], has_content: bool) -> dict[str, Any]:
+    summary: dict[str, Any] = {
+        "index": index,
+        "status": debug_trace.get("status"),
+        "trace_present": has_content,
+    }
+    for key in ("id", "type", "request_id", "error", "error_message"):
+        if debug_trace.get(key) is not None:
+            summary[key] = debug_trace.get(key)
+    return summary
+
+
+def status_summary(statuses: list[Any]) -> tuple[Any, dict[str, int]]:
+    counts: dict[str, int] = {}
+    for status in statuses:
+        key = str(status) if status is not None else "unknown"
+        counts[key] = counts.get(key, 0) + 1
+    if not counts:
+        return None, counts
+    if len(counts) == 1:
+        return next(iter(counts)), counts
+    return "mixed", counts
+
+
+def trace_text_from_json(obj: Any) -> tuple[str, dict[str, Any]]:
+    tx = first_nested(obj, "invalidating_transaction") or {}
+    debug_traces = debug_trace_candidates(obj)
+    parts = []
+    debug_trace_results = []
+    for index, debug_trace in enumerate(debug_traces):
+        current_parts = trace_parts(debug_trace)
+        parts.extend(current_parts)
+        debug_trace_results.append(debug_trace_summary(index, debug_trace, bool(current_parts)))
+
+    debug_trace_statuses = [result.get("status") for result in debug_trace_results]
+    debug_trace_status, debug_trace_status_counts = status_summary(debug_trace_statuses)
 
     meta = {
         "incident_id": first_nested(obj, "incident_id"),
@@ -92,7 +165,12 @@ def trace_text_from_json(obj: Any) -> tuple[str, dict[str, Any]]:
         "block_number": tx.get("block_number") if isinstance(tx, dict) else None,
         "landed_on_chain": tx.get("landed_on_chain") if isinstance(tx, dict) else None,
         "revert_reason": tx.get("revert_reason") if isinstance(tx, dict) else None,
-        "debug_trace_status": debug_trace.get("status") if isinstance(debug_trace, dict) else None,
+        "debug_trace_status": debug_trace_status,
+        "debug_trace_statuses": debug_trace_statuses,
+        "debug_trace_status_counts": debug_trace_status_counts,
+        "debug_trace_results": debug_trace_results,
+        "debug_trace_count": len(debug_trace_results),
+        "debug_trace_present_count": sum(1 for result in debug_trace_results if result["trace_present"]),
         "trace_present": bool(parts),
     }
     return "\n".join(parts), meta
@@ -343,6 +421,11 @@ def parse_file(path: Path) -> dict[str, Any]:
         "pcl_tx_id": None,
         "transaction_hash": None,
         "debug_trace_status": None,
+        "debug_trace_statuses": [],
+        "debug_trace_status_counts": {},
+        "debug_trace_results": [],
+        "debug_trace_count": 0,
+        "debug_trace_present_count": 0,
         "trace_present": bool(raw.strip()),
     }
 
