@@ -1,6 +1,6 @@
 ---
 name: pcl-invalidation-deep-dive
-description: Run local agentic triage for Phylax PCL/Credible Layer invalidations, protected-loss events, blocked transactions, failed or pending debug traces, and "we got hacked" requests by using the pcl CLI plus JSON-RPC, cast, explorer/source, and optional decompiler evidence. Use when a user reports a new invalidation, asks what a dropped transaction attempted, why an assertion invalidated it, whether it looks malicious or benign, what value or protocol state was protected, what risk remains, or what action to take next across any EVM protocol, chain, asset type, router, bridge, vault, lending market, token, or custom assertion.
+description: Run local agentic triage for Phylax PCL/Credible Layer invalidations, protected-loss events, blocked transactions, failed or pending debug traces, and "we got hacked" requests by using the pcl CLI plus keyless/public or keyed JSON-RPC, cast, Sourcify/4byte/explorer source lookups, and local decompiler evidence. Use when a user reports a new invalidation, asks what a dropped transaction attempted, why an assertion invalidated it, whether it looks malicious or benign, what value or protocol state was protected, what risk remains, or what action to take next across any EVM protocol, chain, asset type, router, bridge, vault, lending market, token, or custom assertion.
 ---
 
 # PCL Invalidation Deep Dive
@@ -28,6 +28,7 @@ description: Run local agentic triage for Phylax PCL/Credible Layer invalidation
 - "Labels are enough for RCA." Important code-bearing contracts need verified source, Sourcify data, decompiled output, or an explicit unresolved-source gap.
 - "This is just an allowance drain." Treat allowance abuse as one mechanism, not the default. Check the assertion logic, protocol state, privileged roles, callbacks, oracle/accounting paths, bridges, vaults, NFTs/ERC1155s, and native value where the trace points there.
 - "`cast` is optional." `cast` is required for professional selector decoding, calldata decoding, RPC reads, balance/allowance/storage checks, and replay probes unless the user explicitly accepts a degraded analysis.
+- "External API keys are mandatory." Prefer a keyless run first when the PCL trace is available: public RPC for basic reads, Sourcify for verified source, 4byte/cast for selectors, and Heimdall locally for unverified bytecode. Treat keyed archive RPC and explorer APIs as confidence/speed upgrades, not default blockers.
 
 ## Operating Standard
 
@@ -44,6 +45,8 @@ Always separate:
 - **Non-fungible or state-only protection**: asset ids, ownership/state changes, or protocol risk that cannot be honestly reduced to a USD number without pricing evidence.
 
 This skill is the local version of the production "Agentic triage" flow: it should work from PCL invalidation records and local/API evidence, without requiring the dApp backend to precompute the report.
+
+Keyless mode means no third-party RPC, explorer, source, or decompiler API keys. Live incident discovery still needs `pcl` platform auth unless the user provides exported PCL incident/trace artifacts or a prebuilt evidence packet.
 
 Read [references/etl-pipeline.md](references/etl-pipeline.md) when you need the full local ETL checklist, data-source matrix, context packet, or value-accounting rules.
 
@@ -113,17 +116,19 @@ Use this mode whenever an `evidence_packet.md` or equivalent prefetched packet i
    - Key rows by `(incident_id, invalidating_transaction.id)`. Do not dedupe incident coverage by transaction hash alone; repeated simulations can reuse a hash while differing by incident window, block number, PCL tx id, or trace status.
 
 4. **Assemble the local triage context**
-   - Run `scripts/check_triage_requirements.py --chain-id <chain-id> --require-explorer` before deep RCA. Add `--require-decompiler` when unverified code, transient contracts, or source gaps must be resolved for the answer.
+   - Start with the keyless preflight: `scripts/check_triage_requirements.py --chain-id <chain-id> --no-api-keys`. Add `--require-decompiler` when unverified code, transient contracts, or source gaps must be resolved for the answer.
+   - Use keyed high-fidelity mode only when keyless coverage is insufficient or the user asks for maximum confidence: `scripts/check_triage_requirements.py --chain-id <chain-id> --require-explorer`. Add `--require-decompiler` when needed.
    - If the requirements preflight exits non-zero, stop and surface its output verbatim. Do not continue to a root-cause report until the missing RPC/explorer/decompiler capability is configured, unless the user explicitly accepts a degraded report.
    - Build a local evidence packet from PCL plus RPC/explorer data: transaction object, transaction execution trace, assertion execution trace, previous transaction from the sender, all touched contract addresses, created contracts, ABIs/source when available, asset/protocol metadata, receipts/logs, and relevant state reads.
    - Fetch the previous transaction from the same sender before the invalidation block/hash using explorer account history or an equivalent RPC/indexer source. Save it as `previous_tx_<sender>.json`; if unavailable, list it as a gap because it can distinguish benign user flow, preparatory approvals, and multi-block exploit setup.
    - Treat contract source context as a required stage before root-cause analysis. Extract every address from transaction traces, assertion traces, transaction objects, created-contract lines, token proxy/implementation delegatecalls, and assertion/runtime helper calls.
-   - Run `scripts/collect_contract_context.py --chain-id <chain-id> --out-dir contract_context trace_*.json` after traces are saved. Provide `--rpc-url` explicitly or rely on current env. It fetches bytecode, Etherscan V2 source, Sourcify source, and emits `contract_context_manifest.json` with unverified decompiler targets.
+   - Run `scripts/collect_contract_context.py --chain-id <chain-id> --no-api-keys --out-dir contract_context trace_*.json` after traces are saved for the default keyless pass. Provide `--rpc-url` explicitly or rely on current env/public RPC fallback. It fetches bytecode, Sourcify source, and emits `contract_context_manifest.json` with unverified decompiler targets.
+   - Rerun without `--no-api-keys` and with an explorer key only when Sourcify/decompilation leaves a material source gap.
    - When `contract_context_manifest.json` has bytecode-backed `decompiler_targets`, run `scripts/run_heimdall_decompiler.py contract_context/contract_context_manifest.json --out-dir decompiled --require-success`. Heimdall-rs is the only supported decompiler path for this skill. Install `heimdall` on PATH or set `HEIMDALL_BIN=/absolute/path/to/heimdall`.
    - After normalization, contract context, decompilation, and targeted replay/state reads, run `scripts/build_evidence_packet.py --run-dir <run-dir> --incident-json <incident.json> --trace-json <trace.json> --normalized-json <normalized.json> --contract-context <manifest.json> --decompilation-manifest <heimdall_manifest.json> --aux-file "state reads=state_reads.json" --aux-file "previous sender txs=previous_tx.json" --out evidence_packet.md`. Use the packet as the report agent's primary input.
    - For a fast single-trace report, run `scripts/render_fast_report.py --packet evidence_packet.md --run-dir <run-dir> --out final_report.md` before any free-form writing. Review the draft for obvious errors and only then add concise human improvements.
    - If an evidence packet is already provided, read it first and treat listed artifacts as prefetched. Do not rerun `pcl search`, incident list/detail, trace fetch, source collection, or decompilation unless a listed artifact is missing, stale, or inconsistent with the request.
-   - The contract-context helper exits with the exact missing JSON-RPC requirement when no RPC is configured. Use `--allow-missing-rpc` only when explicitly accepting a degraded source-only packet, then list that as a confidence gap.
+   - The contract-context helper tries explicit/env RPC, derived provider RPC when allowed, and configured public RPC fallbacks. It exits with the exact missing JSON-RPC requirement when none works. Use `--allow-missing-rpc` only when explicitly accepting a degraded source-only packet, then list that as a confidence gap.
    - For contracts created inside a non-landed PCL simulation, `eth_getCode(latest)` may return no code. Treat these as transient created-contract gaps, then recover init/runtime bytecode from trace output, calldata, replay, or decompiler tooling before relying on that route for RCA.
    - For every code-bearing address, attach one of: verified source/ABI, Sourcify contract data, decompiled output, or a specific unresolved-source gap. Do not do root-cause analysis from labels alone when source/decompiled context is missing for an important touched contract.
    - Store large JSON artifacts under `/tmp` or the current workspace and summarize from files instead of pasting huge traces into the final answer.
@@ -147,16 +152,17 @@ Use this mode whenever an `evidence_packet.md` or equivalent prefetched packet i
    - For proxy tokens, avoid counting both the proxy call and implementation delegatecall. Count one attempted token movement at the proxy token address, using the event or non-delegatecall line as the canonical row.
 
 7. **Replay and verify on chain**
-   - Use Alchemy or another archive RPC for `eth_getTransactionByHash`, receipts, logs, balances, allowances, storage reads, and `debug_traceTransaction` or `trace_call` when available.
+   - Use public RPC first for keyless basic reads (`eth_chainId`, `eth_getCode`, transaction/receipt checks, latest reads, and block-pinned reads when supported). Label public RPC as rate-limited and non-archive/non-debug unless verified otherwise.
+   - Use Alchemy or another archive RPC for stronger `eth_getTransactionByHash`, receipts, logs, balances, allowances, storage reads, and `debug_traceTransaction` or `trace_call` when keyless RPC cannot answer the needed method or block.
    - If chain-specific RPC env vars are missing but `ALCHEMY_API_KEY` is set, derive the chain RPC URL only when the chain is known to the helper. Do not print secrets.
-   - RPC discovery order: `--rpc-url`, explicit chain RPC env var, generic chain-id env patterns, generic `RPC_URL`, derived Alchemy URL from `ALCHEMY_API_KEY`, then public RPC only for basic reads. Label public-RPC results as non-archive/non-debug unless verified otherwise.
+   - RPC discovery order: `--rpc-url`, explicit chain RPC env var, generic chain-id env patterns, generic `RPC_URL`, derived Alchemy URL from `ALCHEMY_API_KEY` unless `--no-api-keys` is set, then public RPC fallback for supported chains. Label public-RPC results as non-archive/non-debug unless verified otherwise.
    - Record whether each RPC or explorer data source was environment-provided, derived, or public fallback. Do not say an env var is missing unless you checked it in the current shell.
    - Use `cast 4byte`, `cast calldata-decode`, `cast call`, `cast run`, `cast rpc`, and block-pinned state reads to decode, replay, or sanity-check the invalidating transaction where possible.
    - Fetch the sender's previous transaction with Etherscan v2 account history when available:
      `module=account&action=txlist&address=<sender>&endblock=<block-1>&sort=desc&page=1&offset=3&chainid=<chain_id>`.
-     If explorer history is unavailable, use an equivalent indexer or bounded block/RPC scan and record the limitation.
+     If explorer history is unavailable in keyless mode, use an equivalent no-key indexer when available, a bounded block/RPC scan only when it is cheap, or record previous-transaction history as a gap. Do not block the whole report on this gap when the PCL trace already proves the attempted movement.
    - For suspicious sequences, run a bounded related-transaction lookback around previous blocks for the same sender, source owner/account, recipient/beneficiary, asset, spender/operator/adopter, and outer route. Keep the expansion bounded, save the query, and report if the analysis depends on it.
-   - Use Etherscan v2 or chain explorers for verified source/ABI, asset transfers, contract labels, creation txs, and public links. For Etherscan V2-compatible explorers, try `module=contract&action=getsourcecode&address=<address>&chainid=<chain_id>` when an Etherscan-compatible key is available; otherwise use chain-specific explorer APIs when configured.
+   - Use Sourcify first for no-key verified source/ABI. Use Etherscan v2 or chain explorers for verified source/ABI, asset transfers, contract labels, creation txs, and public links when keys are configured or keyless source is insufficient.
    - Use Sourcify as a no-key verified-source fallback with `/server/v2/contract/<chain-id>/<address>?fields=all`.
    - For code-bearing addresses without verified source, use Heimdall-rs via `scripts/run_heimdall_decompiler.py`. If Heimdall is unavailable, store runtime bytecode and list the address as a source/decompiler gap instead of switching to a different decompiler.
    - Label all decompiled output as approximate. Use it to understand control flow, selectors, storage, and call routing; do not treat it as verified source.
@@ -229,30 +235,32 @@ Do not turn a repeated-attempt figure into a real-loss figure. Do not call faile
 Expect to need:
 
 - PCL CLI auth and platform incident APIs.
-- Chain RPC with archive/debug support, preferably Alchemy.
-- Etherscan v2 or chain-specific explorer API keys for tx, receipt, logs, source, and ABI.
+- Chain RPC. Public RPC is acceptable for keyless basic reads when it works; archive/debug RPC is a high-confidence upgrade.
 - Sourcify for no-key verified contract lookup where supported.
-- Heimdall-rs for unverified contract decompilation. Install `heimdall` on PATH or set `HEIMDALL_BIN=/absolute/path/to/heimdall`.
+- 4byte/cast for no-key selector and event signature lookup.
+- Heimdall-rs for local unverified contract decompilation. Install `heimdall` on PATH or set `HEIMDALL_BIN=/absolute/path/to/heimdall`.
 - `cast` for selectors, calldata, storage, balances, and ad hoc ABI calls.
 - Asset metadata and prices from chain calls, DeFiLlama, CoinGecko, NFT/indexer APIs, or a verified token list.
+- Optional keyed upgrade: Etherscan v2 or chain-specific explorer API keys for faster tx history, source, ABI, labels, and logs.
 - Optional: Tenderly/Phalcon for visual traces when RPC debug traces are unavailable.
 
 Minimum useful environment:
 
 - `pcl` authenticated against the platform.
-- One chain RPC URL with archive/debug capability, such as Alchemy.
-- Explorer API access for the target chain, such as Etherscan v2, Blockscout, or a chain-specific explorer.
 - `cast` from Foundry.
-- Optional decompiler access for unverified or transient contracts.
+- One working RPC source: explicit/env RPC, derived provider RPC, or a configured public RPC fallback for the chain.
+- Sourcify reachable, plus Heimdall when important touched contracts are unverified.
+- Optional high-fidelity upgrades: archive/debug RPC and explorer API access for account history, labels, source/ABI acceleration, and trace replay.
 
-Before RCA, run the requirement gate and treat failures as blocking:
+Before RCA, run the requirement gate. Use keyless mode by default and treat failures as blocking only for the capability the report actually needs:
 
 ```bash
+scripts/check_triage_requirements.py --chain-id <chain-id> --no-api-keys
+scripts/check_triage_requirements.py --chain-id <chain-id> --no-api-keys --require-decompiler
 scripts/check_triage_requirements.py --chain-id <chain-id> --require-explorer
-scripts/check_triage_requirements.py --chain-id <chain-id> --require-explorer --require-decompiler
 ```
 
-The gate reports which capability is missing, why it is required, and which env var or flag can satisfy it. Surface that output directly instead of producing a low-confidence triage that hides missing RPC, verification, or decompiler access.
+The gate reports which capability is missing, why it is required, and which env var, local tool, public RPC fallback, or flag can satisfy it. Surface that output directly instead of producing a low-confidence triage that hides missing RPC, verification, or decompiler access.
 
 ## Final Answer Shape
 

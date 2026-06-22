@@ -16,6 +16,10 @@ test("pcl invalidation report contract uses one full improved trace", async () =
   assert.match(combined, /Fast Packet-Only Report Mode/);
   assert.match(combined, /Target under 90 seconds/);
   assert.match(combined, /Keep the main report to about 1,200-1,800 words/);
+  assert.match(combined, /--no-api-keys/);
+  assert.match(combined, /External API keys are mandatory/);
+  assert.match(combined, /Sourcify/);
+  assert.match(combined, /public RPC/);
 
   assert.doesNotMatch(combined, /Improved Transaction Trace/);
   assert.doesNotMatch(combined, /Improved Assertion Trace/);

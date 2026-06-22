@@ -44,6 +44,68 @@ test("check_triage_requirements reports generic chain RPC env options", async ()
   );
 });
 
+test("check_triage_requirements can skip keyed explorer APIs in no-key mode", async () => {
+  const scriptPath = path.join(
+    process.cwd(),
+    "skills",
+    "pcl-invalidation-deep-dive",
+    "scripts",
+    "check_triage_requirements.py",
+  );
+
+  let stdout = "";
+  try {
+    await execFileAsync(
+      "python3",
+      [scriptPath, "--chain-id", "777777", "--require-explorer", "--no-api-keys", "--json"],
+      {
+        cwd: process.cwd(),
+        env: {
+          PATH: process.env.PATH ?? "",
+          ETHERSCAN_API_KEY: "must-not-be-required",
+          ALCHEMY_API_KEY: "must-not-be-used",
+        },
+      },
+    );
+  } catch (error) {
+    stdout = error.stdout;
+    assert.equal(error.code, 2);
+  }
+
+  const report = JSON.parse(stdout);
+  const explorerRequirement = report.requirements.find((item) => item.name === "keyed_explorer_api");
+  const sourceRequirement = report.requirements.find((item) => item.name === "keyless_source_lookup");
+  assert.ok(explorerRequirement);
+  assert.equal(explorerRequirement.ok, true);
+  assert.match(explorerRequirement.notes.join(" "), /--no-api-keys/);
+  assert.ok(sourceRequirement);
+  assert.equal(sourceRequirement.ok, true);
+});
+
+test("requirements helper lists public RPC fallback for supported chains", async () => {
+  const scriptPath = path.join(
+    process.cwd(),
+    "skills",
+    "pcl-invalidation-deep-dive",
+    "scripts",
+    "check_triage_requirements.py",
+  );
+  const code = [
+    "import importlib.util",
+    `spec = importlib.util.spec_from_file_location("check_reqs", ${JSON.stringify(scriptPath)})`,
+    "module = importlib.util.module_from_spec(spec)",
+    "spec.loader.exec_module(module)",
+    "print('\\n'.join(module.public_rpc_options('59144')))",
+  ].join("; ");
+
+  const { stdout } = await execFileAsync("python3", ["-c", code], {
+    cwd: process.cwd(),
+    env: { PATH: process.env.PATH ?? "" },
+  });
+
+  assert.match(stdout, /https:\/\/rpc\.linea\.build/);
+});
+
 test("collect_contract_context missing RPC error names generic chain env options", async () => {
   const tempPath = path.join(
     process.cwd(),
@@ -71,6 +133,52 @@ test("collect_contract_context missing RPC error names generic chain env options
   assert.match(stderr, /CHAIN_777777_RPC_URL/);
   assert.match(stderr, /RPC_URL_777777/);
   assert.match(stderr, /EVM_777777_RPC_URL/);
+});
+
+test("collect_contract_context can ignore explorer API keys in no-key mode", async () => {
+  const tempDir = await mkdtemp(path.join(tmpdir(), "pcl-contract-context-nokey-"));
+  const tracePath = path.join(tempDir, "trace.txt");
+  const outDir = path.join(tempDir, "contract_context");
+  const callTarget = `0x${"8".repeat(40)}`;
+
+  await writeFile(tracePath, `${callTarget}::execute()\n`);
+
+  const scriptPath = path.join(
+    process.cwd(),
+    "skills",
+    "pcl-invalidation-deep-dive",
+    "scripts",
+    "collect_contract_context.py",
+  );
+  await execFileAsync(
+    "python3",
+    [
+      scriptPath,
+      "--chain-id",
+      "777777",
+      "--out-dir",
+      outDir,
+      "--allow-missing-rpc",
+      "--skip-sourcify",
+      "--no-api-keys",
+      tracePath,
+    ],
+    {
+      cwd: process.cwd(),
+      env: {
+        PATH: process.env.PATH ?? "",
+        ETHERSCAN_API_KEY: "must-not-be-used",
+        EXPLORER_API_KEY: "must-not-be-used",
+      },
+    },
+  );
+
+  const manifest = JSON.parse(
+    await readFile(path.join(outDir, "contract_context_manifest.json"), "utf8"),
+  );
+  assert.equal(manifest.no_api_keys, true);
+  assert.equal(manifest.keyed_explorer_configured, false);
+  assert.equal(manifest.addresses[0].etherscan_source, null);
 });
 
 test("check_triage_requirements requires Heimdall for decompiler access", async () => {

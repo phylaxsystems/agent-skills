@@ -7,7 +7,9 @@ The production agentic triage feature has two goals:
 - Make transaction and assertion traces understandable to humans.
 - Produce a triage report that explains what the dropped transaction attempted, why the assertion invalidated it, whether the transaction looks malicious, and what action the user should take.
 
-This skill implements that flow locally using `pcl`, RPC/explorer APIs, `cast`, and local artifacts.
+This skill implements that flow locally using `pcl`, keyless/public or keyed RPC, Sourcify/4byte/explorer source lookups, `cast`, and local artifacts.
+
+Keyless means no third-party RPC, explorer, source, or decompiler API keys. Live PCL incident discovery still requires PCL platform auth unless the operator starts from exported incident/trace artifacts or a prebuilt evidence packet.
 
 ## Stage 0: Intake
 
@@ -65,17 +67,18 @@ Identity keys:
 Before source collection or root-cause analysis, run the local requirements gate for the target chain:
 
 ```bash
+scripts/check_triage_requirements.py --chain-id <chain-id> --no-api-keys
+scripts/check_triage_requirements.py --chain-id <chain-id> --no-api-keys --require-decompiler
 scripts/check_triage_requirements.py --chain-id <chain-id> --require-explorer
-scripts/check_triage_requirements.py --chain-id <chain-id> --require-explorer --require-decompiler
 ```
 
-Use the first command for normal triage. Use the second command when unverified code, created/transient contracts, or source-dependent RCA makes decompiler access necessary.
+Use keyless mode for normal triage. Use the decompiler variant when unverified code, created/transient contracts, or source-dependent RCA makes decompiler access necessary. Use keyed explorer mode only when Sourcify/decompilation or public RPC leaves a material gap.
 
 Exit code `2` means local requirements are missing. Surface the report verbatim to the operator because it explains:
 
 - which capability is missing
 - why it is required
-- which flag or environment variable can satisfy it
+- which public fallback, flag, local tool, or environment variable can satisfy it
 
 Do not continue into root-cause analysis after a failed preflight unless the user explicitly accepts a degraded report. When continuing in degraded mode, list the missing capability in `Open Gaps and Confidence`.
 
@@ -101,6 +104,7 @@ Required context:
 Optional context:
 
 - Explorer labels.
+- Keyed account-history API data.
 - Tenderly/Phalcon visual trace.
 - Heimdall-rs decompiler output when verified source is unavailable.
 - Related txs before/after the invalidation from the same sender, recipient, or route.
@@ -298,15 +302,33 @@ Recommended command:
 ```bash
 scripts/collect_contract_context.py \
   --chain-id <chain-id> \
-  --rpc-url <rpc-url> \
-  --explorer-api-key <etherscan-v2-compatible-key> \
+  --no-api-keys \
   --out-dir contract_context \
   trace_*.json
 ```
 
-The helper extracts trace addresses, fetches runtime bytecode, tries Etherscan V2 `getsourcecode`, tries Sourcify verified contract lookup, and writes `contract_context_manifest.json`. Review its `decompiler_targets` before writing the RCA.
+The helper extracts trace addresses, fetches runtime bytecode through explicit/env/provider/public RPC, tries Sourcify verified contract lookup, optionally tries Etherscan V2 `getsourcecode` when not in `--no-api-keys` mode and a key is configured, and writes `contract_context_manifest.json`. Review its `decompiler_targets` before writing the RCA.
 
-By default the helper refuses to run without JSON-RPC because `eth_getCode` is required for contract/EOA classification, bytecode capture, and decompiler target discovery. If RPC is missing, it exits with a requirements block that names the chain id and the accepted configuration options. Use `--allow-missing-rpc` only for an explicitly degraded source-only packet, and then record the missing RPC as a confidence gap.
+By default the helper refuses to run without JSON-RPC because `eth_getCode` is required for contract/EOA classification, bytecode capture, and decompiler target discovery. If no explicit/env/keyed/public RPC works, it exits with a requirements block that names the chain id and the accepted configuration options. Use `--allow-missing-rpc` only for an explicitly degraded source-only packet, and then record the missing RPC as a confidence gap.
+
+Keyless source command:
+
+```bash
+scripts/collect_contract_context.py \
+  --chain-id <chain-id> \
+  --no-api-keys \
+  --out-dir contract_context \
+  trace_*.json
+```
+
+Keyed upgrade when keyless source leaves a material gap:
+
+```bash
+scripts/collect_contract_context.py \
+  --chain-id <chain-id> \
+  --out-dir contract_context_keyed \
+  trace_*.json
+```
 
 For bytecode-backed decompiler targets, run Heimdall-rs:
 
@@ -341,8 +363,8 @@ Do not claim what a temporary contract did solely from its address or label.
 
 Source/decompiler fallback order:
 
-1. Verified source and ABI from Etherscan V2 or a chain-specific explorer.
-2. Sourcify verified contract data.
+1. Sourcify verified contract data.
+2. Verified source and ABI from Etherscan V2 or a chain-specific explorer when keys are configured.
 3. Known local labels/ABIs from the project or token metadata.
 4. Heimdall-rs for code-bearing addresses without verified source.
 5. If no decompiler is configured, store bytecode and list the address as an unresolved source/decompiler gap.
@@ -407,8 +429,8 @@ RPC discovery order:
 2. Explicit chain RPC env var, such as `LINEA_RPC_URL`.
 3. Generic chain-id RPC env var, such as `CHAIN_59144_RPC_URL`.
 4. Generic `RPC_URL`.
-5. Derived Alchemy URL from `ALCHEMY_API_KEY` when the chain is known.
-6. Public RPC fallback only for basic reads; label it as non-archive/non-debug unless verified otherwise.
+5. Derived Alchemy URL from `ALCHEMY_API_KEY` when the chain is known, unless `--no-api-keys` is set.
+6. Public RPC fallback for supported chains. Use it for basic reads and label it as non-archive/non-debug unless verified otherwise.
 
 When `ALCHEMY_API_KEY` exists but no explicit RPC URL is set, derive the chain endpoint from chain id/name only when the helper has a known mapping. Do not guess provider hostnames for unknown chains.
 
@@ -416,15 +438,16 @@ When `ALCHEMY_API_KEY` exists but no explicit RPC URL is set, derive the chain e
 https://<known-alchemy-host>/v2/$ALCHEMY_API_KEY
 ```
 
-Check only whether secrets are present; do not print API keys in reports or artifacts. Do not claim an env var is missing unless you checked it in the current shell.
+Check only whether secrets are present; do not print API keys in reports or artifacts. In `--no-api-keys` mode, ignore provider/explorer keys even if they exist in the shell so the run proves the keyless path. Do not claim an env var is missing unless you checked it in the current shell.
 
 Explorer/source lookup order:
 
-1. Etherscan v2 if `ETHERSCAN_API_KEY` is available and the chain id is supported.
-2. Chain-specific or Blockscout-style explorer API if configured.
-3. `cast 4byte <selector>` for selectors.
-4. Public explorer links for manual follow-up.
-5. Heimdall-rs only when verified source is unavailable and deeper root cause requires it.
+1. Sourcify `/server/v2/contract/<chain-id>/<address>?fields=all` for no-key verified source/ABI.
+2. `cast 4byte <selector>` or 4byte.directory for no-key selectors/events.
+3. Etherscan v2 if `ETHERSCAN_API_KEY` is available and the chain id is supported.
+4. Chain-specific or Blockscout-style explorer API if configured.
+5. Public explorer links for manual follow-up.
+6. Heimdall-rs only when verified source is unavailable and deeper root cause requires it.
 
 Useful source/ABI shape:
 
@@ -441,6 +464,8 @@ curl -fsS "https://api.etherscan.io/v2/api?chainid=<chain_id>&module=account&act
 ```
 
 Use the closest previous tx from the same sender unless a stronger source-specific previous action is needed. If explorer account history is unavailable, use an equivalent indexer, Alchemy enhanced APIs where configured, or a bounded block/RPC scan. Record the source and limits.
+
+In keyless mode, previous-transaction lookup is best effort. A standard JSON-RPC node cannot query account history directly. Use a no-key indexer if one is available for the chain, scan a small block window only when it is cheap, or list sender history as a gap rather than blocking a trace-backed report.
 
 Bounded multi-block lookback:
 

@@ -79,7 +79,7 @@
     },
     "pcl-invalidation-deep-dive": {
       "basePath": "skills/pcl-invalidation-deep-dive",
-      "description": "Run local agentic triage for Phylax PCL/Credible Layer invalidations, protected-loss events, blocked transactions, failed or pending debug traces, and \"we got hacked\" requests by using the pcl CLI plus JSON-RPC, cast, explorer/source, and optional decompiler evidence. Use when a user reports a new invalidation, asks what a dropped transaction attempted, why an assertion invalidated it, whether it looks malicious or benign, what value or protocol state was protected, what risk remains, or what action to take next across any EVM protocol, chain, asset type, router, bridge, vault, lending market, token, or custom assertion.",
+      "description": "Run local agentic triage for Phylax PCL/Credible Layer invalidations, protected-loss events, blocked transactions, failed or pending debug traces, and \"we got hacked\" requests by using the pcl CLI plus keyless/public or keyed JSON-RPC, cast, Sourcify/4byte/explorer source lookups, and local decompiler evidence. Use when a user reports a new invalidation, asks what a dropped transaction attempted, why an assertion invalidated it, whether it looks malicious or benign, what value or protocol state was protected, what risk remains, or what action to take next across any EVM protocol, chain, asset type, router, bridge, vault, lending market, token, or custom assertion.",
       "files": [
         "SKILL.md",
         "agents/openai.yaml",

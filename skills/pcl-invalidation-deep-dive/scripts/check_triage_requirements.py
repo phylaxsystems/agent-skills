@@ -12,6 +12,7 @@ import json
 import os
 import shutil
 import sys
+import urllib.parse
 import urllib.request
 from typing import Any
 
@@ -23,6 +24,15 @@ ALCHEMY_HOSTS = {
     "42161": "arb-mainnet.g.alchemy.com",
     "8453": "base-mainnet.g.alchemy.com",
     "59144": "linea-mainnet.g.alchemy.com",
+}
+
+PUBLIC_RPC_URLS = {
+    "1": ["https://ethereum-rpc.publicnode.com"],
+    "10": ["https://mainnet.optimism.io", "https://optimism-rpc.publicnode.com"],
+    "137": ["https://polygon-rpc.com", "https://polygon-bor-rpc.publicnode.com"],
+    "42161": ["https://arb1.arbitrum.io/rpc", "https://arbitrum-one-rpc.publicnode.com"],
+    "8453": ["https://mainnet.base.org", "https://base-rpc.publicnode.com"],
+    "59144": ["https://rpc.linea.build", "https://linea-rpc.publicnode.com"],
 }
 
 CHAIN_RPC_ENV = {
@@ -80,7 +90,17 @@ def chain_rpc_env_names(chain_id: str) -> list[str]:
     return unique([name for name in names if name])
 
 
-def rpc_candidates(chain_id: str, explicit: str | None) -> list[dict[str, str]]:
+def rpc_source_label(url: str) -> str:
+    parsed = urllib.parse.urlparse(url)
+    host = parsed.netloc or url
+    return f"public_rpc:{host}"
+
+
+def public_rpc_options(chain_id: str) -> list[str]:
+    return PUBLIC_RPC_URLS.get(chain_id, [])
+
+
+def rpc_candidates(chain_id: str, explicit: str | None, no_api_keys: bool) -> list[dict[str, str]]:
     candidates: list[dict[str, str]] = []
     if explicit:
         candidates.append({"source": "--rpc-url", "url": explicit})
@@ -92,10 +112,14 @@ def rpc_candidates(chain_id: str, explicit: str | None) -> list[dict[str, str]]:
     if os.getenv("RPC_URL"):
         candidates.append({"source": "RPC_URL", "url": os.getenv("RPC_URL", "")})
 
-    alchemy_key = os.getenv("ALCHEMY_API_KEY")
-    host = ALCHEMY_HOSTS.get(chain_id)
-    if alchemy_key and host:
-        candidates.append({"source": "ALCHEMY_API_KEY", "url": f"https://{host}/v2/{alchemy_key}"})
+    if not no_api_keys:
+        alchemy_key = os.getenv("ALCHEMY_API_KEY")
+        host = ALCHEMY_HOSTS.get(chain_id)
+        if alchemy_key and host:
+            candidates.append({"source": "ALCHEMY_API_KEY", "url": f"https://{host}/v2/{alchemy_key}"})
+
+    for public_url in public_rpc_options(chain_id):
+        candidates.append({"source": rpc_source_label(public_url), "url": public_url})
     return candidates
 
 
@@ -104,7 +128,7 @@ def rpc_call(rpc_url: str, method: str, params: list[Any]) -> Any:
     request = urllib.request.Request(
         rpc_url,
         data=payload,
-        headers={"Content-Type": "application/json"},
+        headers={"Content-Type": "application/json", "User-Agent": "pcl-invalidation-deep-dive/1.0"},
         method="POST",
     )
     with urllib.request.urlopen(request, timeout=20) as response:
@@ -114,27 +138,36 @@ def rpc_call(rpc_url: str, method: str, params: list[Any]) -> Any:
     return data.get("result")
 
 
-def check_rpc(chain_id: str, explicit: str | None) -> dict[str, Any]:
-    candidates = rpc_candidates(chain_id, explicit)
+def check_rpc(chain_id: str, explicit: str | None, no_api_keys: bool) -> dict[str, Any]:
+    candidates = rpc_candidates(chain_id, explicit, no_api_keys)
+    public_options = public_rpc_options(chain_id)
     requirement = {
         "name": "chain_rpc",
         "required_for": [
             "eth_getCode contract/EOA classification",
             "block-pinned balances, ownership, approvals, and protocol state",
             "receipt/log/transaction verification",
-            "replay/debug trace when supported",
+            "replay/debug trace when supported by the selected RPC",
         ],
         "acceptable_configuration": [
             "--rpc-url <url>",
             *chain_rpc_env_names(chain_id),
             "RPC_URL",
-            "ALCHEMY_API_KEY for supported chains",
+            *([] if no_api_keys else ["ALCHEMY_API_KEY for supported chains"]),
+            *[f"public RPC fallback: {url}" for url in public_options],
         ],
         "configured": bool(candidates),
         "ok": False,
         "selected_source": None,
         "error": None,
+        "notes": [],
     }
+    if public_options:
+        requirement["notes"].append(
+            "Public RPC fallbacks are keyless but may be rate-limited and may not support archive/debug methods."
+        )
+    if no_api_keys:
+        requirement["notes"].append("No-API-key mode: provider API-key-derived RPC URLs are ignored.")
     if not candidates:
         requirement["error"] = "No RPC URL configured for this chain."
         return requirement
@@ -193,6 +226,40 @@ def env_requirement(
         "error": None
         if configured or not required
         else f"Missing one of: {', '.join(env_vars)}.",
+    }
+
+
+def public_source_requirement(no_api_keys: bool) -> dict[str, Any]:
+    return {
+        "name": "keyless_source_lookup",
+        "required_for": [
+            "Sourcify verified source/ABI when available",
+            "4byte selector/event signature lookup",
+            "local Heimdall decompilation after bytecode capture",
+        ],
+        "acceptable_configuration": [
+            "Sourcify /server/v2/contract/<chain-id>/<address>?fields=all",
+            "4byte.directory public API or cast 4byte",
+            "heimdall on PATH or HEIMDALL_BIN for unverified bytecode",
+        ],
+        "configured": True,
+        "ok": True,
+        "selected_source": "public no-key services",
+        "error": None,
+        "notes": ["Used as the default source path in no-API-key mode." if no_api_keys else "Available as fallback."],
+    }
+
+
+def skipped_keyed_explorer_requirement() -> dict[str, Any]:
+    return {
+        "name": "keyed_explorer_api",
+        "required_for": ["optional verified source/ABI acceleration", "optional account-history lookup"],
+        "acceptable_configuration": EXPLORER_ENV_VARS,
+        "configured": False,
+        "ok": True,
+        "selected_source": None,
+        "error": None,
+        "notes": ["Skipped because --no-api-keys was requested; record account-history gaps if no keyless source exists."],
     }
 
 
@@ -262,6 +329,8 @@ def render_text(report: dict[str, Any]) -> str:
             lines.append(f"  error: {item['error']}")
         lines.append(f"  required_for: {', '.join(item['required_for'])}")
         lines.append(f"  configure_with: {', '.join(item['acceptable_configuration'])}")
+        for note in item.get("notes", []):
+            lines.append(f"  note: {note}")
     return "\n".join(lines) + "\n"
 
 
@@ -271,14 +340,22 @@ def main() -> int:
     parser.add_argument("--rpc-url", default=None, help="Explicit RPC URL. Secrets are not printed.")
     parser.add_argument("--require-explorer", action="store_true", help="Fail if explorer/source API access is absent.")
     parser.add_argument("--require-decompiler", action="store_true", help="Fail if decompiler config is absent.")
+    parser.add_argument(
+        "--no-api-keys",
+        action="store_true",
+        help="Use only explicit/env RPC URLs, public RPC fallbacks, Sourcify/4byte, and local tools. Ignore provider/explorer API keys.",
+    )
     parser.add_argument("--json", action="store_true", help="Emit JSON instead of text.")
     args = parser.parse_args()
 
     requirements = [
         tool_requirement("pcl_cli", "pcl", ["platform auth", "incident detail", "trace retrieval"]),
         tool_requirement("foundry_cast", "cast", ["selector decoding", "calldata decoding", "RPC calls", "state reads", "replay checks"]),
-        check_rpc(args.chain_id, args.rpc_url),
-        env_requirement(
+        check_rpc(args.chain_id, args.rpc_url, args.no_api_keys),
+        public_source_requirement(args.no_api_keys),
+        skipped_keyed_explorer_requirement()
+        if args.no_api_keys
+        else env_requirement(
             "explorer_api",
             EXPLORER_ENV_VARS,
             ["verified source/ABI", "previous transaction lookup", "public explorer evidence"],
