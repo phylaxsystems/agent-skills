@@ -39,7 +39,10 @@ test("normalize_pcl_trace preserves all debug trace statuses and parses later us
           {
             id: "trace-completed",
             status: "completed",
-            transaction_trace_content: `${token}::transferFrom(${source}, ${recipient}, 12345)`,
+            transaction_trace_content: [
+              `${token}::transferFrom(${source}, ${recipient}, 12345)`,
+              `emit Transfer(param0: ${source}, param1: ${recipient}, param2: 12345 [1.234e4])`,
+            ].join("\n"),
             assertion_trace_content: "Assertion::check()",
           },
         ],
@@ -75,6 +78,10 @@ test("normalize_pcl_trace preserves all debug trace statuses and parses later us
     ],
   );
   assert.equal(record.transfer_from_call_count, 1);
+  assert.deepEqual(
+    record.event_balance_changes.map((change) => change.raw_delta),
+    ["-12345", "12345"],
+  );
   assert.deepEqual(record.transfers[0], {
     token,
     source_owner: source,

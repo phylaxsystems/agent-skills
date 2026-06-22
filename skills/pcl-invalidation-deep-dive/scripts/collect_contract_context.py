@@ -21,7 +21,7 @@ from typing import Any
 
 
 ANSI_RE = re.compile(r"\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
-ADDRESS_RE = re.compile(r"0x[a-fA-F0-9]{40}")
+ADDRESS_RE = re.compile(r"(?<![a-fA-F0-9])0x[a-fA-F0-9]{40}(?![a-fA-F0-9])")
 CREATED_RE = re.compile(r"\bnew\b[^@\n]*@(?P<address>0x[a-fA-F0-9]{40})")
 ALCHEMY_HOSTS = {
     "1": "eth-mainnet.g.alchemy.com",
@@ -63,7 +63,10 @@ def extract_address_context(files: list[Path]) -> tuple[list[str], set[str]]:
             seen.setdefault(created_address.lower(), created_address)
         for address in ADDRESS_RE.findall(clean):
             key = address.lower()
-            if key != "0x0000000000000000000000000000000000000000":
+            if key not in (
+                "0x0000000000000000000000000000000000000000",
+                "0xffffffffffffffffffffffffffffffffffffffff",
+            ):
                 seen.setdefault(key, address)
     return [seen[key] for key in sorted(seen)], created
 

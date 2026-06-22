@@ -194,8 +194,9 @@ def raw_int(value: str | None) -> int | None:
     if value is None:
         return None
     value = value.strip()
-    if re.fullmatch(r"[0-9]+", value):
-        return int(value)
+    match = re.match(r"(?P<amount>[0-9]+)(?:\s|\[|$)", value)
+    if match:
+        return int(match.group("amount"))
     return None
 
 
