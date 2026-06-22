@@ -491,7 +491,7 @@ Multi-incident grouping:
 
 - Group repeated invalidations by route/signature before writing the report.
 - Suggested signature: `(outer_target, outer_selector, adopter, assertion_id, touched_assets_or_state, sorted(source_accounts), beneficiaries, decoded_revert_reason)`.
-- Render one representative improved transaction trace per group, then list every `(incident_id, pcl_tx_id, hash, block, trace_status)` in the transaction-object table.
+- Render one representative full improved trace per group, then list every `(incident_id, pcl_tx_id, hash, block, trace_status)` in the transaction-object table.
 - If a group contains a failed/no-trace retry, keep it in the group only as an unverified estimate unless calldata or RPC independently verifies the same movement.
 - If balances or recipients differ materially, split into a separate group.
 
@@ -572,7 +572,7 @@ Recommended immediate outputs:
 The production invalidation detail output has two layers:
 
 - An above-the-fold executive summary for quick operator understanding.
-- A detailed triage report with the transaction explanation, root cause, transaction object, improved transaction trace, and improved assertion trace.
+- A detailed triage report with the transaction explanation, root cause, transaction object, and one full improved trace that combines transaction execution with assertion evaluation.
 
 Do not emit only a terse incident summary when the user asks to see the agentic triage output.
 
@@ -688,9 +688,11 @@ selectors: <decoded selectors>
 revert_reason: <decoded reason>
 ```
 
-## Improved Transaction Trace
+## Full Improved Trace
 
-For grouped repeated invalidations, show one representative improved trace per route/signature and state how many PCL txs share that pattern. Do not repeat near-identical trace trees.
+For grouped repeated invalidations, show one representative full improved trace per route/signature and state how many PCL txs share that pattern. Do not repeat near-identical trace trees.
+
+The trace must be a single ordered narrative, not separate transaction and assertion sections. Start with the invalidating transaction's outer call, preserve the relevant call order, include decoded asset/protocol movements and state reads inline, then continue into assertion inspection calls, assertion state checks, and the final invalidation/revert reason.
 
 ```solidity
 [gas] ContractName (0x...)::function(...)
@@ -698,12 +700,8 @@ For grouped repeated invalidations, show one representative improved trace per r
   │   ├─ movement/state read: <source/account> -> <recipient/beneficiary> <amount/id/state>
   │   ├─ decoded event: <standard/event and fields>
   │   └─ delegatecall mirror ignored for accounting
-```
-
-## Improved Assertion Trace
-
-```solidity
-AssertionContract::check()
+  ├─ ...
+AssertionContract (0x...)::check()
   ├─ getAssertionAdopter() -> <adopter>
   ├─ getLogs() -> <decoded logs inspected>
   ├─ getCallInputs(<adopter>, <selector>) -> <decoded calls inspected>

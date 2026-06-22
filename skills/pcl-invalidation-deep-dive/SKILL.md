@@ -164,9 +164,10 @@ If no runner is available, execute the same phases sequentially. Do not let the 
 10. **Report**
    - Default to the production invalidation-detail shape, not a terse incident summary.
    - First render an above-the-fold executive summary that breaks down the transaction, the assertion that invalidated it, an evidence-backed verdict, and one recommended next step.
-   - Then render a detailed triage report with transaction explanation, mermaid diagram, root-cause analysis, transaction object, improved transaction trace, improved assertion trace, value accounting, exposure, and data gaps.
-   - In the detailed trace sections, include decoded movement rows from ERC20/ERC721/ERC1155/ERC4626/native/protocol events when present. These are the easiest rows for operators to verify against the raw trace.
-   - For repeated invalidations, group by route/signature and render one representative improved trace per group, plus a complete transaction-object table for every `(incident_id, pcl_tx_id)`. Do not paste six near-identical traces when a grouped summary is clearer.
+   - Then render a detailed triage report with transaction explanation, mermaid diagram, root-cause analysis, transaction object, full improved trace, value accounting, exposure, and data gaps.
+   - The trace section must be one ordered **Full Improved Trace**, not separate transaction/assertion fragments. Start at the outer transaction call, include intermediate contract calls, decoded movements/state reads, assertion inspection calls, state checks, and the final invalidation/revert reason in execution order.
+   - In the full improved trace, include decoded movement rows from ERC20/ERC721/ERC1155/ERC4626/native/protocol events when present. These are the easiest rows for operators to verify against the raw trace.
+   - For repeated invalidations, group by route/signature and render one representative full improved trace per group, plus a complete transaction-object table for every `(incident_id, pcl_tx_id)`. Do not paste six near-identical traces when a grouped summary is clearer.
    - Use a Mermaid `sequenceDiagram` as the primary diagram for step-by-step transaction execution. Use `flowchart` only as a secondary actor/topology/value-flow view.
    - Include a warning that agentic triage can be wrong when the report will be shown directly to users or operators.
    - Give exact counts: incidents, invalidating txs, completed traces, failed/pending traces, landed txs.
@@ -255,8 +256,7 @@ Use this order:
    - Root cause analysis: evidence-backed mechanism and why it was invalidated.
    - Source/decompiler context: source coverage for all touched code-bearing contracts, plus unresolved or decompiled-only gaps.
    - Transaction object: concise key fields (`hash`, PCL tx id, from, to, value, block, calldata selectors, landed status).
-   - Improved transaction trace: formatted contract names, decoded asset/protocol events, human-readable amounts or ids, and delegatecall notes.
-   - Improved assertion trace: adopter read, logs/call inputs inspected, state checks, revert reason.
+   - Full improved trace: one ordered trace that combines the transaction execution and assertion evaluation. Include formatted contract names, decoded asset/protocol events, human-readable amounts or ids, delegatecall notes, adopter reads, logs/call inputs inspected, state checks, and the final revert reason.
    - Value and exposure: actual loss, unique protected value, repeated blocked attempt volume, unverified estimates, remaining balances/allowances/ownership/state exposure.
    - Open gaps and confidence: failed/pending traces, missing source/ABI, unpriced assets, and what would improve confidence.
 
