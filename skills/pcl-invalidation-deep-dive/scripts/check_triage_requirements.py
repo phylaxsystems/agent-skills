@@ -313,11 +313,78 @@ def decompiler_requirement(required: bool) -> dict[str, Any]:
     }
 
 
+def find_requirement(requirements: list[dict[str, Any]], name: str) -> dict[str, Any] | None:
+    return next((item for item in requirements if item.get("name") == name), None)
+
+
+def build_capability_selection(
+    requirements: list[dict[str, Any]],
+    no_api_keys: bool,
+) -> dict[str, Any]:
+    rpc = find_requirement(requirements, "chain_rpc") or {}
+    explorer = find_requirement(requirements, "explorer_api") or find_requirement(
+        requirements, "keyed_explorer_api"
+    ) or {}
+    decompiler = find_requirement(requirements, "heimdall_decompiler") or {}
+
+    rpc_source = rpc.get("selected_source")
+    rpc_ok = bool(rpc.get("ok"))
+    public_rpc = bool(isinstance(rpc_source, str) and rpc_source.startswith("public_rpc:"))
+    configured_or_private_rpc = rpc_ok and bool(rpc_source) and not public_rpc
+    keyed_explorer_available = bool(explorer.get("configured") and explorer.get("ok"))
+    decompiler_available = bool(decompiler.get("configured") and decompiler.get("ok"))
+
+    if configured_or_private_rpc or keyed_explorer_available:
+        mode = "private-or-mixed"
+        decision = (
+            "Use configured/private endpoints for higher-confidence reads, then fall back to "
+            "Sourcify, 4byte/cast, Heimdall, and public RPC for missing surfaces."
+        )
+    elif rpc_ok:
+        mode = "keyless-public"
+        decision = (
+            "Proceed keyless with public RPC, Sourcify, 4byte/cast, and local Heimdall when "
+            "available; report archive/debug and account-history gaps."
+        )
+    else:
+        mode = "blocked"
+        decision = (
+            "No working RPC was found. Stop before source/context collection unless the user "
+            "accepts a degraded packet without bytecode/state verification."
+        )
+
+    return {
+        "mode": mode,
+        "private_or_configured_rpc_available": configured_or_private_rpc,
+        "public_rpc_available": rpc_ok and public_rpc,
+        "keyed_explorer_available": keyed_explorer_available,
+        "local_decompiler_available": decompiler_available,
+        "no_api_keys_requested": no_api_keys,
+        "operator_message": decision,
+    }
+
+
 def render_text(report: dict[str, Any]) -> str:
     lines = [
         "PCL invalidation triage requirements",
         f"chain_id: {report['chain_id']}",
         f"status: {'ok' if report['ok'] else 'missing_requirements'}",
+        "",
+        "Capability selection",
+        f"recommended_mode: {report['capability_selection']['mode']}",
+        (
+            "private_or_configured_rpc_available: "
+            f"{'yes' if report['capability_selection']['private_or_configured_rpc_available'] else 'no'}"
+        ),
+        (
+            "keyed_explorer_available: "
+            f"{'yes' if report['capability_selection']['keyed_explorer_available'] else 'no'}"
+        ),
+        (
+            "public_rpc_available: "
+            f"{'yes' if report['capability_selection']['public_rpc_available'] else 'no'}"
+        ),
+        f"decision: {report['capability_selection']['operator_message']}",
         "",
     ]
     for item in report["requirements"]:
@@ -369,6 +436,7 @@ def main() -> int:
         "ok": all(item["ok"] for item in requirements),
         "requirements": requirements,
     }
+    report["capability_selection"] = build_capability_selection(requirements, args.no_api_keys)
 
     if args.json:
         json.dump(report, sys.stdout, indent=2, sort_keys=True)

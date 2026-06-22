@@ -67,12 +67,27 @@ Identity keys:
 Before source collection or root-cause analysis, run the local requirements gate for the target chain:
 
 ```bash
+scripts/check_triage_requirements.py --chain-id <chain-id> --json
 scripts/check_triage_requirements.py --chain-id <chain-id> --no-api-keys
 scripts/check_triage_requirements.py --chain-id <chain-id> --no-api-keys --require-decompiler
 scripts/check_triage_requirements.py --chain-id <chain-id> --require-explorer
 ```
 
-Use keyless mode for normal triage. Use the decompiler variant when unverified code, created/transient contracts, or source-dependent RCA makes decompiler access necessary. Use keyed explorer mode only when Sourcify/decompilation or public RPC leaves a material gap.
+Use auto-discovery for normal triage. The JSON report includes `capability_selection`:
+
+- `mode=private-or-mixed`: configured/private RPC or keyed explorer access is available. Use it first, then fallback to public RPC/Sourcify/4byte/Heimdall for missing surfaces.
+- `mode=keyless-public`: no configured/private endpoints were found, but a public RPC works. Proceed without asking for keys and report archive/debug/account-history limitations.
+- `mode=blocked`: no working RPC was found. Stop unless the user accepts degraded source-only analysis.
+
+Use `--no-api-keys` only when the operator wants a no-key proof or when auto-discovery finds no private endpoints. Use `--require-decompiler` when unverified code, created/transient contracts, or source-dependent RCA makes decompiler access necessary. Use keyed explorer mode only when Sourcify/decompilation or public RPC leaves a material gap.
+
+Before collecting source or replay context, show a short capability note:
+
+```text
+Capability mode: <private-or-mixed|keyless-public|blocked>.
+Configured/private RPC: <yes/no>. Keyed explorer: <yes/no>. Public RPC fallback: <yes/no>.
+Proceeding with <mode>; expected gaps: <archive/debug/account-history/source labels/etc>.
+```
 
 Exit code `2` means local requirements are missing. Surface the report verbatim to the operator because it explains:
 
@@ -302,7 +317,6 @@ Recommended command:
 ```bash
 scripts/collect_contract_context.py \
   --chain-id <chain-id> \
-  --no-api-keys \
   --out-dir contract_context \
   trace_*.json
 ```
@@ -311,7 +325,7 @@ The helper extracts trace addresses, fetches runtime bytecode through explicit/e
 
 By default the helper refuses to run without JSON-RPC because `eth_getCode` is required for contract/EOA classification, bytecode capture, and decompiler target discovery. If no explicit/env/keyed/public RPC works, it exits with a requirements block that names the chain id and the accepted configuration options. Use `--allow-missing-rpc` only for an explicitly degraded source-only packet, and then record the missing RPC as a confidence gap.
 
-Keyless source command:
+Keyless source command when `capability_selection.mode=keyless-public` or when proving no-key operation:
 
 ```bash
 scripts/collect_contract_context.py \

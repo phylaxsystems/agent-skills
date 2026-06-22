@@ -28,7 +28,7 @@ description: Run local agentic triage for Phylax PCL/Credible Layer invalidation
 - "Labels are enough for RCA." Important code-bearing contracts need verified source, Sourcify data, decompiled output, or an explicit unresolved-source gap.
 - "This is just an allowance drain." Treat allowance abuse as one mechanism, not the default. Check the assertion logic, protocol state, privileged roles, callbacks, oracle/accounting paths, bridges, vaults, NFTs/ERC1155s, and native value where the trace points there.
 - "`cast` is optional." `cast` is required for professional selector decoding, calldata decoding, RPC reads, balance/allowance/storage checks, and replay probes unless the user explicitly accepts a degraded analysis.
-- "External API keys are mandatory." Prefer a keyless run first when the PCL trace is available: public RPC for basic reads, Sourcify for verified source, 4byte/cast for selectors, and Heimdall locally for unverified bytecode. Treat keyed archive RPC and explorer APIs as confidence/speed upgrades, not default blockers.
+- "External API keys are mandatory." Probe configured/private endpoints first, tell the operator what is available, then proceed with the best mode. Treat keyed archive RPC and explorer APIs as confidence/speed upgrades, not default blockers; fall back to public RPC, Sourcify, 4byte/cast, and Heimdall when private endpoints are absent.
 
 ## Operating Standard
 
@@ -116,14 +116,17 @@ Use this mode whenever an `evidence_packet.md` or equivalent prefetched packet i
    - Key rows by `(incident_id, invalidating_transaction.id)`. Do not dedupe incident coverage by transaction hash alone; repeated simulations can reuse a hash while differing by incident window, block number, PCL tx id, or trace status.
 
 4. **Assemble the local triage context**
-   - Start with the keyless preflight: `scripts/check_triage_requirements.py --chain-id <chain-id> --no-api-keys`. Add `--require-decompiler` when unverified code, transient contracts, or source gaps must be resolved for the answer.
-   - Use keyed high-fidelity mode only when keyless coverage is insufficient or the user asks for maximum confidence: `scripts/check_triage_requirements.py --chain-id <chain-id> --require-explorer`. Add `--require-decompiler` when needed.
-   - If the requirements preflight exits non-zero, stop and surface its output verbatim. Do not continue to a root-cause report until the missing RPC/explorer/decompiler capability is configured, unless the user explicitly accepts a degraded report.
+   - Start with automatic capability discovery: `scripts/check_triage_requirements.py --chain-id <chain-id> --json`. Add `--require-decompiler` when unverified code, transient contracts, or source gaps must be resolved for the answer.
+   - Read `capability_selection`. Before deeper context collection, tell the operator one concise capability note: recommended mode, whether configured/private RPC is available, whether keyed explorer access is available, whether public RPC is being used, and what gaps that creates.
+   - If `capability_selection.mode` is `private-or-mixed`, use configured/private RPC and explorer sources first, with public/Sourcify/Heimdall fallback.
+   - If it is `keyless-public`, proceed without waiting for keys, but label archive/debug/account-history limits.
+   - If the user explicitly wants a no-key proof, rerun with `scripts/check_triage_requirements.py --chain-id <chain-id> --no-api-keys`.
+   - If the requirements preflight exits non-zero and the mode is `blocked`, stop and surface its output verbatim. Do not continue to a root-cause report until the missing RPC/decompiler capability is configured, unless the user explicitly accepts a degraded report.
    - Build a local evidence packet from PCL plus RPC/explorer data: transaction object, transaction execution trace, assertion execution trace, previous transaction from the sender, all touched contract addresses, created contracts, ABIs/source when available, asset/protocol metadata, receipts/logs, and relevant state reads.
    - Fetch the previous transaction from the same sender before the invalidation block/hash using explorer account history or an equivalent RPC/indexer source. Save it as `previous_tx_<sender>.json`; if unavailable, list it as a gap because it can distinguish benign user flow, preparatory approvals, and multi-block exploit setup.
    - Treat contract source context as a required stage before root-cause analysis. Extract every address from transaction traces, assertion traces, transaction objects, created-contract lines, token proxy/implementation delegatecalls, and assertion/runtime helper calls.
-   - Run `scripts/collect_contract_context.py --chain-id <chain-id> --no-api-keys --out-dir contract_context trace_*.json` after traces are saved for the default keyless pass. Provide `--rpc-url` explicitly or rely on current env/public RPC fallback. It fetches bytecode, Sourcify source, and emits `contract_context_manifest.json` with unverified decompiler targets.
-   - Rerun without `--no-api-keys` and with an explorer key only when Sourcify/decompilation leaves a material source gap.
+   - Run `scripts/collect_contract_context.py --chain-id <chain-id> --out-dir contract_context trace_*.json` after traces are saved when private-or-mixed mode is available. Provide `--rpc-url` explicitly or rely on current env/provider/public fallback. It fetches bytecode, Etherscan source when keyed, Sourcify source, and emits `contract_context_manifest.json` with unverified decompiler targets.
+   - Run `scripts/collect_contract_context.py --chain-id <chain-id> --no-api-keys --out-dir contract_context trace_*.json` for keyless-public mode or explicit no-key proof. It ignores provider/explorer keys and uses explicit/env/public RPC plus Sourcify.
    - When `contract_context_manifest.json` has bytecode-backed `decompiler_targets`, run `scripts/run_heimdall_decompiler.py contract_context/contract_context_manifest.json --out-dir decompiled --require-success`. Heimdall-rs is the only supported decompiler path for this skill. Install `heimdall` on PATH or set `HEIMDALL_BIN=/absolute/path/to/heimdall`.
    - After normalization, contract context, decompilation, and targeted replay/state reads, run `scripts/build_evidence_packet.py --run-dir <run-dir> --incident-json <incident.json> --trace-json <trace.json> --normalized-json <normalized.json> --contract-context <manifest.json> --decompilation-manifest <heimdall_manifest.json> --aux-file "state reads=state_reads.json" --aux-file "previous sender txs=previous_tx.json" --out evidence_packet.md`. Use the packet as the report agent's primary input.
    - For a fast single-trace report, run `scripts/render_fast_report.py --packet evidence_packet.md --run-dir <run-dir> --out final_report.md` before any free-form writing. Review the draft for obvious errors and only then add concise human improvements.
@@ -252,15 +255,16 @@ Minimum useful environment:
 - Sourcify reachable, plus Heimdall when important touched contracts are unverified.
 - Optional high-fidelity upgrades: archive/debug RPC and explorer API access for account history, labels, source/ABI acceleration, and trace replay.
 
-Before RCA, run the requirement gate. Use keyless mode by default and treat failures as blocking only for the capability the report actually needs:
+Before RCA, run the requirement gate. Use auto-discovery by default; use keyless mode when private endpoints are absent or the user explicitly asks for no keys:
 
 ```bash
+scripts/check_triage_requirements.py --chain-id <chain-id> --json
 scripts/check_triage_requirements.py --chain-id <chain-id> --no-api-keys
 scripts/check_triage_requirements.py --chain-id <chain-id> --no-api-keys --require-decompiler
 scripts/check_triage_requirements.py --chain-id <chain-id> --require-explorer
 ```
 
-The gate reports which capability is missing, why it is required, and which env var, local tool, public RPC fallback, or flag can satisfy it. Surface that output directly instead of producing a low-confidence triage that hides missing RPC, verification, or decompiler access.
+The gate reports which capability is missing, why it is required, which env var, local tool, public RPC fallback, or flag can satisfy it, and `capability_selection.mode`. Surface a concise capability note before proceeding instead of silently choosing keyed or keyless data sources.
 
 ## Final Answer Shape
 
@@ -277,6 +281,7 @@ Use this order:
 
 2. **Triage Report**
    - Scope and data freshness: snapshot time, project, chain, date range or incident ids, PCL version, trace counts, request ids when relevant.
+   - Data access mode: capability note from preflight, selected RPC/explorer/source/decompiler mode, and any keyless limitations.
    - Detailed transaction explanation: actors, contracts, route, created contracts, source owners/accounts, recipient/beneficiary, asset movements or state changes, landed/not landed status.
    - Mermaid diagram: prefer a numbered `sequenceDiagram` that shows each transaction/assertion step and the assertion stop point. Add a flowchart only if a separate topology/value-flow view is useful.
    - Root cause analysis: evidence-backed mechanism and why it was invalidated.

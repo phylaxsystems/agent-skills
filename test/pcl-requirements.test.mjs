@@ -32,6 +32,7 @@ test("check_triage_requirements reports generic chain RPC env options", async ()
   const rpcRequirement = report.requirements.find((item) => item.name === "chain_rpc");
   assert.ok(rpcRequirement);
   assert.equal(rpcRequirement.ok, false);
+  assert.equal(report.capability_selection.mode, "blocked");
   assert.deepEqual(
     rpcRequirement.acceptable_configuration.slice(0, 5),
     [
@@ -75,11 +76,70 @@ test("check_triage_requirements can skip keyed explorer APIs in no-key mode", as
   const report = JSON.parse(stdout);
   const explorerRequirement = report.requirements.find((item) => item.name === "keyed_explorer_api");
   const sourceRequirement = report.requirements.find((item) => item.name === "keyless_source_lookup");
+  assert.ok(report.capability_selection);
   assert.ok(explorerRequirement);
   assert.equal(explorerRequirement.ok, true);
   assert.match(explorerRequirement.notes.join(" "), /--no-api-keys/);
   assert.ok(sourceRequirement);
   assert.equal(sourceRequirement.ok, true);
+});
+
+test("check_triage_requirements recommends private-or-mixed when configured RPC is available", async () => {
+  const scriptPath = path.join(
+    process.cwd(),
+    "skills",
+    "pcl-invalidation-deep-dive",
+    "scripts",
+    "check_triage_requirements.py",
+  );
+  const code = [
+    "import importlib.util",
+    `spec = importlib.util.spec_from_file_location("check_reqs", ${JSON.stringify(scriptPath)})`,
+    "module = importlib.util.module_from_spec(spec)",
+    "spec.loader.exec_module(module)",
+    "requirements = [",
+    "  {'name': 'chain_rpc', 'ok': True, 'configured': True, 'selected_source': 'LINEA_RPC_URL'},",
+    "  {'name': 'explorer_api', 'ok': False, 'configured': False},",
+    "  {'name': 'heimdall_decompiler', 'ok': True, 'configured': True},",
+    "]",
+    "print(module.build_capability_selection(requirements, False)['mode'])",
+  ].join("\n");
+
+  const { stdout } = await execFileAsync("python3", ["-c", code], {
+    cwd: process.cwd(),
+    env: { PATH: process.env.PATH ?? "" },
+  });
+
+  assert.equal(stdout.trim(), "private-or-mixed");
+});
+
+test("check_triage_requirements recommends keyless-public when only public RPC is available", async () => {
+  const scriptPath = path.join(
+    process.cwd(),
+    "skills",
+    "pcl-invalidation-deep-dive",
+    "scripts",
+    "check_triage_requirements.py",
+  );
+  const code = [
+    "import importlib.util",
+    `spec = importlib.util.spec_from_file_location("check_reqs", ${JSON.stringify(scriptPath)})`,
+    "module = importlib.util.module_from_spec(spec)",
+    "spec.loader.exec_module(module)",
+    "requirements = [",
+    "  {'name': 'chain_rpc', 'ok': True, 'configured': True, 'selected_source': 'public_rpc:rpc.linea.build'},",
+    "  {'name': 'keyed_explorer_api', 'ok': True, 'configured': False},",
+    "  {'name': 'heimdall_decompiler', 'ok': True, 'configured': False},",
+    "]",
+    "print(module.build_capability_selection(requirements, True)['mode'])",
+  ].join("\n");
+
+  const { stdout } = await execFileAsync("python3", ["-c", code], {
+    cwd: process.cwd(),
+    env: { PATH: process.env.PATH ?? "" },
+  });
+
+  assert.equal(stdout.trim(), "keyless-public");
 });
 
 test("requirements helper lists public RPC fallback for supported chains", async () => {
