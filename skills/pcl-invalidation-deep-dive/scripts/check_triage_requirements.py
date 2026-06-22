@@ -56,16 +56,7 @@ EXPLORER_ENV_VARS = [
     "SCROLLSCAN_API_KEY",
 ]
 
-DECOMPILER_ENV_VARS = [
-    "HEIMDALL_DECOMPILE_CMD",
-    "JEB_DECOMPILE_CMD",
-    "EVM_DECOMPILER_CMD",
-    "DECOMPILER_CMD",
-    "EVM_DECOMPILER_API_URL",
-    "DECOMPILER_API_URL",
-    "DEDAUB_API_KEY",
-    "DEDAUB_DECOMPILE_CMD",
-]
+DECOMPILER_ENV_VARS = ["HEIMDALL_BIN"]
 
 
 def unique(values: list[str]) -> list[str]:
@@ -212,90 +203,46 @@ def decompiler_requirement(required: bool) -> dict[str, Any]:
         "source-gap reduction",
     ]
     acceptable_configuration = [
-        "heimdall on PATH for local Heimdall-rs CLI backend",
-        "HEIMDALL_DECOMPILE_CMD",
-        "JEB_DECOMPILE_CMD for licensed JEB headless/API script",
-        "EVM_DECOMPILER_CMD",
-        "DECOMPILER_CMD",
-        "EVM_DECOMPILER_API_URL",
-        "DECOMPILER_API_URL",
-        "DEDAUB_API_KEY for Dedaub only when programmatic API entitlement is active",
-        "DEDAUB_API_URL optional override for Dedaub-compatible base URL",
-        "DEDAUB_DECOMPILE_CMD",
-    ]
-    command_env = [
-        "HEIMDALL_DECOMPILE_CMD",
-        "JEB_DECOMPILE_CMD",
-        "EVM_DECOMPILER_CMD",
-        "DECOMPILER_CMD",
-        "DEDAUB_DECOMPILE_CMD",
-    ]
-    api_url_env = [
-        "EVM_DECOMPILER_API_URL",
-        "DECOMPILER_API_URL",
+        "heimdall on PATH",
+        "HEIMDALL_BIN=/absolute/path/to/heimdall",
     ]
 
-    if shutil.which("heimdall"):
+    configured_bin = os.getenv("HEIMDALL_BIN")
+    if configured_bin:
+        resolved = shutil.which(configured_bin) if os.path.sep not in configured_bin else configured_bin
+        exists = bool(resolved and os.path.exists(resolved) and os.access(resolved, os.X_OK))
         return {
-            "name": "decompiler_backend",
+            "name": "heimdall_decompiler",
+            "required_for": required_for,
+            "acceptable_configuration": acceptable_configuration,
+            "configured": bool(configured_bin),
+            "ok": exists or not required,
+            "selected_source": "HEIMDALL_BIN",
+            "error": None if exists or not required else f"HEIMDALL_BIN is set but is not executable: {configured_bin}",
+        }
+
+    heimdall_path = shutil.which("heimdall")
+    if heimdall_path:
+        return {
+            "name": "heimdall_decompiler",
             "required_for": required_for,
             "acceptable_configuration": acceptable_configuration,
             "configured": True,
             "ok": True,
-            "selected_source": "heimdall on PATH",
+            "selected_source": heimdall_path,
             "error": None,
         }
 
-    configured_commands = [env for env in command_env if os.getenv(env)]
-    if configured_commands:
-        return {
-            "name": "decompiler_backend",
-            "required_for": required_for,
-            "acceptable_configuration": acceptable_configuration,
-            "configured": True,
-            "ok": True,
-            "selected_source": configured_commands[0],
-            "error": None,
-        }
-
-    configured_api_urls = [env for env in api_url_env if os.getenv(env)]
-    if configured_api_urls:
-        return {
-            "name": "decompiler_backend",
-            "required_for": required_for,
-            "acceptable_configuration": acceptable_configuration,
-            "configured": True,
-            "ok": True,
-            "selected_source": configured_api_urls[0],
-            "error": None,
-        }
-
-    if os.getenv("DEDAUB_API_KEY"):
-        return {
-            "name": "decompiler_backend",
-            "required_for": required_for,
-            "acceptable_configuration": acceptable_configuration,
-            "configured": True,
-            "ok": True,
-            "selected_source": "DEDAUB_API_KEY",
-            "error": None,
-        }
-
-    dedaub_url_configured = bool(os.getenv("DEDAUB_API_URL"))
     return {
-        "name": "decompiler_backend",
+        "name": "heimdall_decompiler",
         "required_for": required_for,
         "acceptable_configuration": acceptable_configuration,
-        "configured": dedaub_url_configured,
+        "configured": False,
         "ok": not required,
-        "selected_source": "DEDAUB_API_URL" if dedaub_url_configured else None,
+        "selected_source": None,
         "error": None
         if not required
-        else (
-            "DEDAUB_API_URL is set, but DEDAUB_API_KEY is required for Dedaub x-api-key auth."
-            if dedaub_url_configured
-            else f"Missing one of: {', '.join(DECOMPILER_ENV_VARS)}."
-        ),
+        else "Missing Heimdall-rs. Install `heimdall` on PATH or set HEIMDALL_BIN to an executable heimdall binary.",
     }
 
 

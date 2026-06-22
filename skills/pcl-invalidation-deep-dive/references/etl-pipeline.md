@@ -102,7 +102,7 @@ Optional context:
 
 - Explorer labels.
 - Tenderly/Phalcon visual trace.
-- Decompiler output from Heimdall-rs, JEB, an internal JSON decompiler API, Dedaub with programmatic entitlement, or another configured backend when verified source is unavailable.
+- Heimdall-rs decompiler output when verified source is unavailable.
 - Related txs before/after the invalidation from the same sender, recipient, or route.
 
 Context packet checklist:
@@ -273,42 +273,27 @@ The helper extracts trace addresses, fetches runtime bytecode, tries Etherscan V
 
 By default the helper refuses to run without JSON-RPC because `eth_getCode` is required for contract/EOA classification, bytecode capture, and decompiler target discovery. If RPC is missing, it exits with a requirements block that names the chain id and the accepted configuration options. Use `--allow-missing-rpc` only for an explicitly degraded source-only packet, and then record the missing RPC as a confidence gap.
 
-For bytecode-backed decompiler targets, prefer a controllable backend:
+For bytecode-backed decompiler targets, run Heimdall-rs:
 
 ```bash
-scripts/run_decompiler.py \
+scripts/run_heimdall_decompiler.py \
   contract_context/contract_context_manifest.json \
   --out-dir decompiled \
   --require-success
 ```
 
-Backend configuration options:
+Configuration:
 
-- Local Heimdall-rs: install `heimdall` on PATH, or set `HEIMDALL_DECOMPILE_CMD`.
-- Internal Heimdall REST service: set `EVM_DECOMPILER_API_URL` or `DECOMPILER_API_URL`.
-- Licensed JEB automation: set `JEB_DECOMPILE_CMD` to a headless JEB script/client.
-- Custom wrapper: set `EVM_DECOMPILER_CMD` or `DECOMPILER_CMD`.
-- Native Dedaub: use `scripts/run_dedaub_decompiler.py` only when `DEDAUB_API_KEY` has programmatic API entitlement.
+- Install `heimdall` on PATH.
+- Or set `HEIMDALL_BIN=/absolute/path/to/heimdall`.
 
-The generic command backend accepts templates with `{bytecode_path}`, `{bytecode}`, `{bytecode_no_0x}`, `{address}`, `{address_lower}`, `{chain_id}`, and `{out_dir}`. Example Heimdall command:
+The runner executes:
 
 ```bash
-export HEIMDALL_DECOMPILE_CMD='heimdall decompile {bytecode} --default --include-sol --include-yul --output print'
-scripts/run_decompiler.py contract_context/contract_context_manifest.json --backend command --out-dir decompiled --require-success
+heimdall decompile <runtime-bytecode> --default --include-sol --output print
 ```
 
-The generic JSON API backend sends:
-
-```json
-{
-  "bytecode": "0x...",
-  "address": "0x...",
-  "chain_id": "<chain-id>",
-  "target": { "address": "0x...", "bytecode_path": "..." }
-}
-```
-
-It expects either a JSON object with `source`, `solidity`, `decompiled`, `code`, `yul`, `disassembly`, `disassembled`, or `abi` fields, or a string response. The runner writes `decompiled/<chain>/<address>/source.sol`, `yul.yul`, `disassembled.txt`, `abi.json`, `api_response.json`, `stdout.txt`, `stderr.txt`, `command.json`, and `decompiled/decompiler_manifest.json` as applicable.
+It writes `decompiled/<chain>/<address>/stdout.txt`, `stderr.txt`, `output.txt`, `source.sol` when Solidity-like output is detected, `heimdall.json`, and `decompiled/heimdall_decompilation_manifest.json`.
 
 If a decompiler target has `bytecode_path: null` because the address was created only in the simulated trace, recover init/runtime bytecode from one of:
 
@@ -324,15 +309,13 @@ Source/decompiler fallback order:
 1. Verified source and ABI from Etherscan V2 or a chain-specific explorer.
 2. Sourcify verified contract data.
 3. Known local labels/ABIs from the project or token metadata.
-4. A configured EVM decompiler backend for code-bearing addresses without verified source. Prefer Heimdall-rs/local API or licensed JEB automation for a controllable workflow; Dedaub is acceptable only when programmatic entitlement is confirmed.
+4. Heimdall-rs for code-bearing addresses without verified source.
 5. If no decompiler is configured, store bytecode and list the address as an unresolved source/decompiler gap.
 
-Decompiler backend notes:
+Heimdall notes:
 
-- Heimdall-rs is the best default open backend because it is current, open source, scriptable, and can be wrapped behind a local/internal API.
-- JEB is a strong commercial option for teams with a license; use a headless script/client wrapper rather than assuming a public SaaS endpoint.
-- Public browser tools such as EtherVM are useful for manual cross-checks but should not be treated as production API dependencies.
-- Treat all decompiler API keys as secrets. Never print them. `DEDAUB_API_URL` alone is not enough for native Dedaub.
+- Heimdall-rs is the only supported decompiler in this skill. That keeps the local triage path fast, deterministic, and easy to test.
+- If Heimdall is unavailable, do not substitute another decompiler in the skill run. Record the missing source/decompiler context as a gap and continue only if the user accepts degraded confidence.
 - Label decompiled or AI-reconstructed code as approximate. Use it for control-flow, selector, storage, and routing hypotheses, then validate critical claims against trace/RPC evidence.
 
 RCA source-context rule:
@@ -406,7 +389,7 @@ Explorer/source lookup order:
 2. Chain-specific or Blockscout-style explorer API if configured.
 3. `cast 4byte <selector>` for selectors.
 4. Public explorer links for manual follow-up.
-5. A configured decompiler backend only when verified source is unavailable and deeper root cause requires it.
+5. Heimdall-rs only when verified source is unavailable and deeper root cause requires it.
 
 Useful source/ABI shape:
 

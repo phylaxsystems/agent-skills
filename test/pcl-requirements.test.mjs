@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -73,7 +73,7 @@ test("collect_contract_context missing RPC error names generic chain env options
   assert.match(stderr, /EVM_777777_RPC_URL/);
 });
 
-test("check_triage_requirements requires Dedaub API key, not only URL", async () => {
+test("check_triage_requirements requires Heimdall for decompiler access", async () => {
   const scriptPath = path.join(
     process.cwd(),
     "skills",
@@ -90,8 +90,7 @@ test("check_triage_requirements requires Dedaub API key, not only URL", async ()
       {
         cwd: process.cwd(),
         env: {
-          PATH: process.env.PATH ?? "",
-          DEDAUB_API_URL: "https://api.dedaub.example",
+          PATH: "/usr/bin:/bin",
         },
       },
     );
@@ -101,112 +100,121 @@ test("check_triage_requirements requires Dedaub API key, not only URL", async ()
   }
 
   const report = JSON.parse(stdout);
-  const requirement = report.requirements.find((item) => item.name === "decompiler_backend");
+  const requirement = report.requirements.find((item) => item.name === "heimdall_decompiler");
+  assert.equal(requirement.configured, false);
+  assert.equal(requirement.ok, false);
+  assert.match(requirement.error, /Missing Heimdall-rs/);
+});
+
+test("check_triage_requirements accepts Heimdall on PATH", async () => {
+  const tempDir = await mkdtemp(path.join(tmpdir(), "pcl-heimdall-path-"));
+  const heimdallPath = path.join(tempDir, "heimdall");
+  await writeFile(heimdallPath, "#!/bin/sh\nexit 0\n");
+  await chmod(heimdallPath, 0o755);
+
+  const scriptPath = path.join(
+    process.cwd(),
+    "skills",
+    "pcl-invalidation-deep-dive",
+    "scripts",
+    "check_triage_requirements.py",
+  );
+
+  let stdout = "";
+  try {
+    await execFileAsync(
+      "python3",
+      [scriptPath, "--chain-id", "777777", "--require-decompiler", "--json"],
+      {
+        cwd: process.cwd(),
+        env: {
+          PATH: `${tempDir}:/usr/bin:/bin`,
+        },
+      },
+    );
+  } catch (error) {
+    stdout = error.stdout;
+    assert.equal(error.code, 2);
+  }
+
+  const report = JSON.parse(stdout);
+  const requirement = report.requirements.find((item) => item.name === "heimdall_decompiler");
+  assert.equal(requirement.configured, true);
+  assert.equal(requirement.ok, true);
+  assert.equal(requirement.selected_source, heimdallPath);
+});
+
+test("check_triage_requirements accepts HEIMDALL_BIN", async () => {
+  const tempDir = await mkdtemp(path.join(tmpdir(), "pcl-heimdall-bin-"));
+  const heimdallPath = path.join(tempDir, "custom-heimdall");
+  await writeFile(heimdallPath, "#!/bin/sh\nexit 0\n");
+  await chmod(heimdallPath, 0o755);
+
+  const scriptPath = path.join(
+    process.cwd(),
+    "skills",
+    "pcl-invalidation-deep-dive",
+    "scripts",
+    "check_triage_requirements.py",
+  );
+
+  let stdout = "";
+  try {
+    await execFileAsync(
+      "python3",
+      [scriptPath, "--chain-id", "777777", "--require-decompiler", "--json"],
+      {
+        cwd: process.cwd(),
+        env: {
+          PATH: "/usr/bin:/bin",
+          HEIMDALL_BIN: heimdallPath,
+        },
+      },
+    );
+  } catch (error) {
+    stdout = error.stdout;
+    assert.equal(error.code, 2);
+  }
+
+  const report = JSON.parse(stdout);
+  const requirement = report.requirements.find((item) => item.name === "heimdall_decompiler");
+  assert.equal(requirement.configured, true);
+  assert.equal(requirement.ok, true);
+  assert.equal(requirement.selected_source, "HEIMDALL_BIN");
+});
+
+test("check_triage_requirements rejects non-executable HEIMDALL_BIN", async () => {
+  const scriptPath = path.join(
+    process.cwd(),
+    "skills",
+    "pcl-invalidation-deep-dive",
+    "scripts",
+    "check_triage_requirements.py",
+  );
+
+  let stdout = "";
+  try {
+    await execFileAsync(
+      "python3",
+      [scriptPath, "--chain-id", "777777", "--require-decompiler", "--json"],
+      {
+        cwd: process.cwd(),
+        env: {
+          PATH: "/usr/bin:/bin",
+          HEIMDALL_BIN: "/tmp/not-heimdall",
+        },
+      },
+    );
+  } catch (error) {
+    stdout = error.stdout;
+    assert.equal(error.code, 2);
+  }
+
+  const report = JSON.parse(stdout);
+  const requirement = report.requirements.find((item) => item.name === "heimdall_decompiler");
   assert.equal(requirement.configured, true);
   assert.equal(requirement.ok, false);
-  assert.match(requirement.error, /DEDAUB_API_KEY is required/);
-});
-
-test("check_triage_requirements accepts generic decompiler command backend", async () => {
-  const scriptPath = path.join(
-    process.cwd(),
-    "skills",
-    "pcl-invalidation-deep-dive",
-    "scripts",
-    "check_triage_requirements.py",
-  );
-
-  let stdout = "";
-  try {
-    await execFileAsync(
-      "python3",
-      [scriptPath, "--chain-id", "777777", "--require-decompiler", "--json"],
-      {
-        cwd: process.cwd(),
-        env: {
-          PATH: process.env.PATH ?? "",
-          HEIMDALL_DECOMPILE_CMD: "heimdall decompile {bytecode} --output print",
-        },
-      },
-    );
-  } catch (error) {
-    stdout = error.stdout;
-    assert.equal(error.code, 2);
-  }
-
-  const report = JSON.parse(stdout);
-  const requirement = report.requirements.find((item) => item.name === "decompiler_backend");
-  assert.equal(requirement.configured, true);
-  assert.equal(requirement.ok, true);
-  assert.equal(requirement.selected_source, "HEIMDALL_DECOMPILE_CMD");
-});
-
-test("check_triage_requirements accepts generic decompiler API backend", async () => {
-  const scriptPath = path.join(
-    process.cwd(),
-    "skills",
-    "pcl-invalidation-deep-dive",
-    "scripts",
-    "check_triage_requirements.py",
-  );
-
-  let stdout = "";
-  try {
-    await execFileAsync(
-      "python3",
-      [scriptPath, "--chain-id", "777777", "--require-decompiler", "--json"],
-      {
-        cwd: process.cwd(),
-        env: {
-          PATH: process.env.PATH ?? "",
-          EVM_DECOMPILER_API_URL: "http://127.0.0.1:7639/api/decompile",
-        },
-      },
-    );
-  } catch (error) {
-    stdout = error.stdout;
-    assert.equal(error.code, 2);
-  }
-
-  const report = JSON.parse(stdout);
-  const requirement = report.requirements.find((item) => item.name === "decompiler_backend");
-  assert.equal(requirement.configured, true);
-  assert.equal(requirement.ok, true);
-  assert.equal(requirement.selected_source, "EVM_DECOMPILER_API_URL");
-});
-
-test("check_triage_requirements accepts Dedaub API key for native Dedaub access", async () => {
-  const scriptPath = path.join(
-    process.cwd(),
-    "skills",
-    "pcl-invalidation-deep-dive",
-    "scripts",
-    "check_triage_requirements.py",
-  );
-
-  let stdout = "";
-  try {
-    await execFileAsync(
-      "python3",
-      [scriptPath, "--chain-id", "777777", "--require-decompiler", "--json"],
-      {
-        cwd: process.cwd(),
-        env: {
-          PATH: process.env.PATH ?? "",
-          DEDAUB_API_KEY: "test-key",
-        },
-      },
-    );
-  } catch (error) {
-    stdout = error.stdout;
-    assert.equal(error.code, 2);
-  }
-
-  const report = JSON.parse(stdout);
-  const requirement = report.requirements.find((item) => item.name === "decompiler_backend");
-  assert.equal(requirement.configured, true);
-  assert.equal(requirement.ok, true);
-  assert.equal(requirement.selected_source, "DEDAUB_API_KEY");
+  assert.match(requirement.error, /HEIMDALL_BIN is set but is not executable/);
 });
 
 test("collect_contract_context ignores non-address hex substrings", async () => {
