@@ -108,12 +108,12 @@ def source_summary(context: dict[str, Any] | None) -> dict[str, list[str]]:
         if not address:
             continue
         code_type = item.get("code_type")
+        if item.get("created_in_trace"):
+            summary["created_contracts"].append(address)
         if item.get("verified_source_available"):
             summary["verified_source"].append(address)
         elif item.get("decompiler_needed"):
             summary["decompiled_needed"].append(address)
-        elif item.get("created_in_trace"):
-            summary["created_contracts"].append(address)
         elif code_type == "no_code":
             summary["no_code"].append(address)
         elif code_type == "contract":

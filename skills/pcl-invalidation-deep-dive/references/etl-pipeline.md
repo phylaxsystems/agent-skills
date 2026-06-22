@@ -166,6 +166,7 @@ scripts/build_evidence_packet.py \
   --normalized-json normalized_traces.json \
   --contract-context contract_context/contract_context_manifest.json \
   --decompilation-manifest decompiled/heimdall_decompilation_manifest.json \
+  --aux-file "capability preflight=capability_preflight.json" \
   --aux-file "state reads=state_reads.json" \
   --aux-file "previous sender txs=previous_tx.json" \
   --aux-file "price snapshot=prices.json" \

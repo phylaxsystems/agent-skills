@@ -195,6 +195,30 @@ test("generateManifest excludes .DS_Store files", async () => {
   assert.deepEqual(manifest.skills.rust.files, ["SKILL.md"]);
 });
 
+test("generateManifest excludes Python cache artifacts", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "manifest-pycache-"));
+
+  await mkdir(path.join(root, "skills", "rust", "scripts", "__pycache__"), { recursive: true });
+  await writeFile(
+    path.join(root, "skills", "rust", "SKILL.md"),
+    "---\nname: rust\ndescription: Rust skill\n---\n",
+  );
+  await writeFile(path.join(root, "skills", "rust", "scripts", "tool.py"), "print('ok')\n");
+  await writeFile(
+    path.join(root, "skills", "rust", "scripts", "__pycache__", "tool.cpython-312.pyc"),
+    "",
+  );
+  await writeFile(path.join(root, "skills", "rust", "scripts", "tool.pyo"), "");
+
+  const manifest = await generateManifest({
+    skillsDir: path.join(root, "skills"),
+    workflowsDir: path.join(root, "workflows"),
+    agentsDir: path.join(root, "agents"),
+  });
+
+  assert.deepEqual(manifest.skills.rust.files, ["SKILL.md", "scripts/tool.py"]);
+});
+
 test("optimize-assertion-triggers skill ships with Codex UI metadata", async () => {
   const manifest = await generateManifest({
     skillsDir: path.join(process.cwd(), "skills"),

@@ -11,6 +11,7 @@ import argparse
 import json
 import re
 import time
+from json import JSONDecodeError
 from pathlib import Path
 from typing import Any
 
@@ -33,8 +34,11 @@ ALLOWANCE_RE = re.compile(
 def read_json(path: Path | None) -> Any:
     if not path or not path.exists():
         return None
-    with path.open() as file:
-        return json.load(file)
+    try:
+        with path.open() as file:
+            return json.load(file)
+    except (JSONDecodeError, UnicodeDecodeError, OSError):
+        return None
 
 
 def unwrap_data(value: Any) -> Any:
@@ -134,6 +138,15 @@ def first_artifact(artifacts: dict[str, Path], contains: str) -> Path | None:
     return None
 
 
+def first_json_artifact(artifacts: dict[str, Path], *patterns: str) -> Path | None:
+    lowered_patterns = [pattern.lower() for pattern in patterns]
+    for label, path in artifacts.items():
+        label_lower = label.lower()
+        if all(pattern in label_lower for pattern in lowered_patterns) and path.suffix.lower() == ".json":
+            return path
+    return None
+
+
 def tx_from_incident(incident: Any, tx_id: str | None) -> dict[str, Any]:
     payload = unwrap_data(incident) if incident is not None else {}
     if not isinstance(payload, dict):
@@ -157,11 +170,24 @@ def read_prefetched(packet_data: dict[str, Any]) -> dict[str, Any]:
     artifacts = packet_data["artifacts"]
     incident = read_json(first_artifact(artifacts, "incident detail"))
     normalized = read_json(first_artifact(artifacts, "normalized trace"))
-    state = read_json(first_artifact(artifacts, "state"))
-    previous = read_json(first_artifact(artifacts, "previous"))
+    state = read_json(
+        first_json_artifact(artifacts, "state")
+        or first_json_artifact(artifacts, "balance")
+        or first_json_artifact(artifacts, "allowance")
+    )
+    previous = read_json(first_json_artifact(artifacts, "previous") or first_json_artifact(artifacts, "history"))
+    preflight = read_json(first_json_artifact(artifacts, "preflight") or first_json_artifact(artifacts, "capability"))
     tx = tx_from_incident(incident, packet_data["scope"].get("PCL tx id"))
     record = normalize_record(normalized, packet_data["scope"].get("PCL tx id"))
-    return {"incident": incident, "normalized": normalized, "state": state, "previous": previous, "tx": tx, "record": record}
+    return {
+        "incident": incident,
+        "normalized": normalized,
+        "state": state,
+        "previous": previous,
+        "preflight": preflight,
+        "tx": tx,
+        "record": record,
+    }
 
 
 def decimals_for(state: dict[str, Any] | None, token: str | None) -> int:
@@ -178,6 +204,67 @@ def symbol_for(state: dict[str, Any] | None, token: str | None) -> str:
     return token_meta.get("symbol") or "token"
 
 
+def state_reads(state: dict[str, Any] | None) -> list[dict[str, Any]]:
+    if not isinstance(state, dict):
+        return []
+    reads = state.get("reads")
+    if isinstance(reads, list):
+        return [read for read in reads if isinstance(read, dict)]
+    if isinstance(reads, dict):
+        return [read for read in reads.values() if isinstance(read, dict)]
+    return []
+
+
+def capability_note(preflight: Any) -> str:
+    if not isinstance(preflight, dict):
+        return (
+            "Capability preflight artifact was not listed in the packet. Treat data access mode as "
+            "unspecified and preserve source/RPC gaps explicitly."
+        )
+    selection = preflight.get("capability_selection")
+    requirements = preflight.get("requirements") if isinstance(preflight.get("requirements"), list) else []
+    if not isinstance(selection, dict):
+        return "Capability preflight artifact is present but does not include capability_selection."
+    rpc = next((item for item in requirements if item.get("name") == "chain_rpc"), {})
+    explorer = next(
+        (item for item in requirements if item.get("name") in ("explorer_api", "keyed_explorer_api")),
+        {},
+    )
+    decompiler = next((item for item in requirements if item.get("name") == "heimdall_decompiler"), {})
+    rpc_source = f" ({rpc.get('selected_source')})" if rpc.get("selected_source") else ""
+    explorer_source = f" ({explorer.get('selected_source')})" if explorer.get("selected_source") else ""
+    decompiler_source = f" ({decompiler.get('selected_source')})" if decompiler.get("selected_source") else ""
+    return (
+        f"Capability mode: `{selection.get('mode', 'unknown')}`. "
+        f"Configured/private RPC: `{'yes' if selection.get('private_or_configured_rpc_available') else 'no'}`"
+        f"{rpc_source}. "
+        f"Keyed explorer: `{'yes' if selection.get('keyed_explorer_available') else 'no'}`"
+        f"{explorer_source}. "
+        f"Public RPC fallback: `{'yes' if selection.get('public_rpc_available') else 'no'}`. "
+        f"Local decompiler: `{'yes' if selection.get('local_decompiler_available') else 'no'}`"
+        f"{decompiler_source}. "
+        f"{selection.get('operator_message', '')}"
+    )
+
+
+def decompiler_note(source_lines: list[str], preflight: Any) -> str:
+    joined = "\n".join(source_lines).lower()
+    selection = preflight.get("capability_selection") if isinstance(preflight, dict) else {}
+    decompiler_available = bool(isinstance(selection, dict) and selection.get("local_decompiler_available"))
+    if "0 completed" in joined or (not decompiler_available and "decompiled_needed" in joined):
+        return (
+            "Decompiler output is unavailable for at least one important code-bearing contract. "
+            "Do not treat transient/router implementation behavior as source-confirmed; the value "
+            "conclusion here comes from executed trace calls and events."
+        )
+    if "completed" in joined:
+        return (
+            "Decompiler output is approximate. It is useful for route shape and source-gap tracking; "
+            "the value conclusion comes from executed trace calls and events."
+        )
+    return "No decompiler output was used in this deterministic draft."
+
+
 def unique_attempted(transfers: list[dict[str, str]]) -> dict[tuple[str, str], int]:
     totals: dict[tuple[str, str], int] = {}
     for transfer in transfers:
@@ -192,6 +279,7 @@ def render_report(packet_data: dict[str, Any], prefetched: dict[str, Any], packe
     events = packet_data["events"]
     allowances = packet_data["allowances"]
     state = prefetched["state"] if isinstance(prefetched.get("state"), dict) else {}
+    preflight = prefetched.get("preflight")
     tx = prefetched["tx"]
     record = prefetched["record"]
     decimals = decimals_for(state, transfers[0]["token"] if transfers else None)
@@ -210,8 +298,8 @@ def render_report(packet_data: dict[str, Any], prefetched: dict[str, Any], packe
     pcl_tx_id = scope.get("PCL tx id", "unknown")
     chain_id = scope.get("Chain id", "unknown")
     block = tx.get("block_number") or record.get("block_number") or "unknown"
-    tx_null = state.get("transaction") is None if state else str(scope.get("Landed on chain")).lower() == "false"
-    receipt_null = state.get("receipt") is None if state else str(scope.get("Landed on chain")).lower() == "false"
+    tx_present = state.get("transaction") is not None if state else False
+    receipt_present = state.get("receipt") is not None if state else False
 
     movement_rows = []
     for transfer in transfers:
@@ -227,7 +315,7 @@ def render_report(packet_data: dict[str, Any], prefetched: dict[str, Any], packe
         )
 
     exposure_rows = []
-    for read in state.get("reads", []) if state else []:
+    for read in state_reads(state):
         exposure_rows.append(
             "| `{}` | `{}` {} | `{}` {} | `{}` |".format(
                 short(read.get("source_owner")),
@@ -273,13 +361,15 @@ def render_report(packet_data: dict[str, Any], prefetched: dict[str, Any], packe
             previous_summary = f"prefetch gap: {previous.get('error')}"
 
     source_context = "\n".join(packet_data["source_lines"][:10]) or "- source context not available"
+    access_note = capability_note(preflight)
+    source_note = decompiler_note(packet_data["source_lines"], preflight)
     artifact_count = len(packet_data["artifacts"])
 
     report = f"""# PCL Invalidation Triage Report: 0x-settler `{incident_id[:8]}`
 
 ## Executive Summary
 
-**Transaction.** PCL blocked `{hash_value}` on Linea (`chain_id={chain_id}`) at block `{block}`. The transaction was from `{sender}` to `{target}` and is marked `landed_on_chain=false`; the prefetched state file has transaction object null={tx_null} and receipt null={receipt_null}. The completed trace shows an attempted {symbol} drain through `{adopter}`.
+**Transaction.** PCL blocked `{hash_value}` on Linea (`chain_id={chain_id}`) at block `{block}`. The transaction was from `{sender}` to `{target}` and is marked `landed_on_chain=false`; prefetched chain evidence shows RPC transaction object `{'present' if tx_present else 'absent'}` and receipt `{'present' if receipt_present else 'absent'}`. Treat it as blocked unless a receipt proves otherwise. The completed trace shows an attempted {symbol} drain through `{adopter}`.
 
 **Assertion.** `AllowanceAssertion` (`{scope.get('Assertion id', 'unknown')}`) invalidated with exact reason: `{revert_reason}`.
 
@@ -302,6 +392,10 @@ def render_report(packet_data: dict[str, Any], prefetched: dict[str, Any], packe
 | Trace status | `{scope.get('Debug trace status', 'unknown')}` |
 | Evidence | `{packet_path}` plus `{artifact_count}` listed artifact files |
 | Live calls during render | `none` |
+
+### Data Access Mode
+
+{access_note}
 
 ### Detailed Transaction Explanation
 
@@ -333,7 +427,7 @@ Mechanism: allowance abuse via the 0x Settler adopter. The critical evidence is 
 
 {source_context}
 
-Decompiler output is approximate. It is useful for route shape and source-gap tracking; the value conclusion comes from executed trace calls and events.
+{source_note}
 
 ### Transaction Object
 

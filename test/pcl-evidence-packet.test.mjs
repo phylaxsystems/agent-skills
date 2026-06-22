@@ -16,6 +16,8 @@ test("build_evidence_packet writes compact report-agent packet", async () => {
   const contextPath = path.join(tempDir, "contract_context_manifest.json");
   const decompilationPath = path.join(tempDir, "heimdall_decompilation_manifest.json");
   const statePath = path.join(tempDir, "state_reads.json");
+  const preflightPath = path.join(tempDir, "capability_preflight.json");
+  const stateTranscriptPath = path.join(tempDir, "state_reads_transcript.txt");
   const outPath = path.join(tempDir, "evidence_packet.md");
   const reportPath = path.join(tempDir, "final_report.md");
 
@@ -107,7 +109,7 @@ test("build_evidence_packet writes compact report-agent packet", async () => {
     JSON.stringify({
       addresses: [
         { address: token, code_type: "contract", verified_source_available: true },
-        { address: wrapper, code_type: "contract", decompiler_needed: true },
+        { address: wrapper, code_type: "contract", decompiler_needed: true, created_in_trace: true },
         { address: owner, code_type: "no_code" },
       ],
     }),
@@ -142,6 +144,25 @@ test("build_evidence_packet writes compact report-agent packet", async () => {
       ],
     }),
   );
+  await writeFile(
+    preflightPath,
+    JSON.stringify({
+      capability_selection: {
+        mode: "private-or-mixed",
+        private_or_configured_rpc_available: true,
+        keyed_explorer_available: true,
+        public_rpc_available: false,
+        local_decompiler_available: true,
+        operator_message: "Use configured/private endpoints first.",
+      },
+      requirements: [
+        { name: "chain_rpc", selected_source: "ALCHEMY_API_KEY" },
+        { name: "explorer_api", selected_source: "ETHERSCAN_API_KEY", configured: true, ok: true },
+        { name: "heimdall_decompiler", selected_source: "/tmp/heimdall", configured: true, ok: true },
+      ],
+    }),
+  );
+  await writeFile(stateTranscriptPath, "state read transcript, not JSON\n");
 
   const scriptPath = path.join(
     process.cwd(),
@@ -172,6 +193,10 @@ test("build_evidence_packet writes compact report-agent packet", async () => {
     decompilationPath,
     "--aux-file",
     `state reads=${statePath}`,
+    "--aux-file",
+    `state transcript=${stateTranscriptPath}`,
+    "--aux-file",
+    `capability preflight=${preflightPath}`,
     "--pcl-tx-id",
     "tx-1",
     "--out",
@@ -190,6 +215,7 @@ test("build_evidence_packet writes compact report-agent packet", async () => {
   assert.match(packet, /Transfer from address with non-zero allowance to adopter/);
   assert.match(packet, /Incident invalidating tx count from detail: `2`/);
   assert.match(packet, /1,071\.751815 token units/);
+  assert.match(packet, /created_contracts: `1`/);
 
   const renderScriptPath = path.join(
     process.cwd(),
@@ -211,6 +237,10 @@ test("build_evidence_packet writes compact report-agent packet", async () => {
   assert.ok(renderResult.elapsed_ms < 1000);
 
   const report = await readFile(reportPath, "utf8");
+  assert.match(report, /Data Access Mode/);
+  assert.match(report, /Capability mode: `private-or-mixed`/);
+  assert.match(report, /ALCHEMY_API_KEY/);
+  assert.match(report, /ETHERSCAN_API_KEY/);
   assert.match(report, /Full Improved Trace/);
   assert.match(report, /Actual landed loss/);
   assert.match(report, /Unique protected value/);
