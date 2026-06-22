@@ -86,7 +86,9 @@
         "references/etl-pipeline.md",
         "scripts/check_triage_requirements.py",
         "scripts/collect_contract_context.py",
-        "scripts/normalize_pcl_trace.py"
+        "scripts/normalize_pcl_trace.py",
+        "scripts/run_decompiler.py",
+        "scripts/run_dedaub_decompiler.py"
       ]
     },
     "testing-assertions": {

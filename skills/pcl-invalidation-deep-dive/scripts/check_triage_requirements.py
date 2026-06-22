@@ -57,12 +57,14 @@ EXPLORER_ENV_VARS = [
 ]
 
 DECOMPILER_ENV_VARS = [
-    "DEDAUB_API_KEY",
-    "DEDAUB_API_URL",
-    "DEDAUB_DECOMPILE_CMD",
-    "EVM_DECOMPILER_API_URL",
+    "HEIMDALL_DECOMPILE_CMD",
+    "JEB_DECOMPILE_CMD",
     "EVM_DECOMPILER_CMD",
     "DECOMPILER_CMD",
+    "EVM_DECOMPILER_API_URL",
+    "DECOMPILER_API_URL",
+    "DEDAUB_API_KEY",
+    "DEDAUB_DECOMPILE_CMD",
 ]
 
 
@@ -203,6 +205,100 @@ def env_requirement(
     }
 
 
+def decompiler_requirement(required: bool) -> dict[str, Any]:
+    required_for = [
+        "unverified runtime bytecode",
+        "transient contract bytecode review",
+        "source-gap reduction",
+    ]
+    acceptable_configuration = [
+        "heimdall on PATH for local Heimdall-rs CLI backend",
+        "HEIMDALL_DECOMPILE_CMD",
+        "JEB_DECOMPILE_CMD for licensed JEB headless/API script",
+        "EVM_DECOMPILER_CMD",
+        "DECOMPILER_CMD",
+        "EVM_DECOMPILER_API_URL",
+        "DECOMPILER_API_URL",
+        "DEDAUB_API_KEY for Dedaub only when programmatic API entitlement is active",
+        "DEDAUB_API_URL optional override for Dedaub-compatible base URL",
+        "DEDAUB_DECOMPILE_CMD",
+    ]
+    command_env = [
+        "HEIMDALL_DECOMPILE_CMD",
+        "JEB_DECOMPILE_CMD",
+        "EVM_DECOMPILER_CMD",
+        "DECOMPILER_CMD",
+        "DEDAUB_DECOMPILE_CMD",
+    ]
+    api_url_env = [
+        "EVM_DECOMPILER_API_URL",
+        "DECOMPILER_API_URL",
+    ]
+
+    if shutil.which("heimdall"):
+        return {
+            "name": "decompiler_backend",
+            "required_for": required_for,
+            "acceptable_configuration": acceptable_configuration,
+            "configured": True,
+            "ok": True,
+            "selected_source": "heimdall on PATH",
+            "error": None,
+        }
+
+    configured_commands = [env for env in command_env if os.getenv(env)]
+    if configured_commands:
+        return {
+            "name": "decompiler_backend",
+            "required_for": required_for,
+            "acceptable_configuration": acceptable_configuration,
+            "configured": True,
+            "ok": True,
+            "selected_source": configured_commands[0],
+            "error": None,
+        }
+
+    configured_api_urls = [env for env in api_url_env if os.getenv(env)]
+    if configured_api_urls:
+        return {
+            "name": "decompiler_backend",
+            "required_for": required_for,
+            "acceptable_configuration": acceptable_configuration,
+            "configured": True,
+            "ok": True,
+            "selected_source": configured_api_urls[0],
+            "error": None,
+        }
+
+    if os.getenv("DEDAUB_API_KEY"):
+        return {
+            "name": "decompiler_backend",
+            "required_for": required_for,
+            "acceptable_configuration": acceptable_configuration,
+            "configured": True,
+            "ok": True,
+            "selected_source": "DEDAUB_API_KEY",
+            "error": None,
+        }
+
+    dedaub_url_configured = bool(os.getenv("DEDAUB_API_URL"))
+    return {
+        "name": "decompiler_backend",
+        "required_for": required_for,
+        "acceptable_configuration": acceptable_configuration,
+        "configured": dedaub_url_configured,
+        "ok": not required,
+        "selected_source": "DEDAUB_API_URL" if dedaub_url_configured else None,
+        "error": None
+        if not required
+        else (
+            "DEDAUB_API_URL is set, but DEDAUB_API_KEY is required for Dedaub x-api-key auth."
+            if dedaub_url_configured
+            else f"Missing one of: {', '.join(DECOMPILER_ENV_VARS)}."
+        ),
+    }
+
+
 def render_text(report: dict[str, Any]) -> str:
     lines = [
         "PCL invalidation triage requirements",
@@ -241,12 +337,7 @@ def main() -> int:
             ["verified source/ABI", "previous transaction lookup", "public explorer evidence"],
             args.require_explorer,
         ),
-        env_requirement(
-            "decompiler_api",
-            DECOMPILER_ENV_VARS,
-            ["unverified runtime bytecode", "transient contract bytecode review", "source-gap reduction"],
-            args.require_decompiler,
-        ),
+        decompiler_requirement(args.require_decompiler),
     ]
 
     report = {

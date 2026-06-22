@@ -73,6 +73,142 @@ test("collect_contract_context missing RPC error names generic chain env options
   assert.match(stderr, /EVM_777777_RPC_URL/);
 });
 
+test("check_triage_requirements requires Dedaub API key, not only URL", async () => {
+  const scriptPath = path.join(
+    process.cwd(),
+    "skills",
+    "pcl-invalidation-deep-dive",
+    "scripts",
+    "check_triage_requirements.py",
+  );
+
+  let stdout = "";
+  try {
+    await execFileAsync(
+      "python3",
+      [scriptPath, "--chain-id", "777777", "--require-decompiler", "--json"],
+      {
+        cwd: process.cwd(),
+        env: {
+          PATH: process.env.PATH ?? "",
+          DEDAUB_API_URL: "https://api.dedaub.example",
+        },
+      },
+    );
+  } catch (error) {
+    stdout = error.stdout;
+    assert.equal(error.code, 2);
+  }
+
+  const report = JSON.parse(stdout);
+  const requirement = report.requirements.find((item) => item.name === "decompiler_backend");
+  assert.equal(requirement.configured, true);
+  assert.equal(requirement.ok, false);
+  assert.match(requirement.error, /DEDAUB_API_KEY is required/);
+});
+
+test("check_triage_requirements accepts generic decompiler command backend", async () => {
+  const scriptPath = path.join(
+    process.cwd(),
+    "skills",
+    "pcl-invalidation-deep-dive",
+    "scripts",
+    "check_triage_requirements.py",
+  );
+
+  let stdout = "";
+  try {
+    await execFileAsync(
+      "python3",
+      [scriptPath, "--chain-id", "777777", "--require-decompiler", "--json"],
+      {
+        cwd: process.cwd(),
+        env: {
+          PATH: process.env.PATH ?? "",
+          HEIMDALL_DECOMPILE_CMD: "heimdall decompile {bytecode} --output print",
+        },
+      },
+    );
+  } catch (error) {
+    stdout = error.stdout;
+    assert.equal(error.code, 2);
+  }
+
+  const report = JSON.parse(stdout);
+  const requirement = report.requirements.find((item) => item.name === "decompiler_backend");
+  assert.equal(requirement.configured, true);
+  assert.equal(requirement.ok, true);
+  assert.equal(requirement.selected_source, "HEIMDALL_DECOMPILE_CMD");
+});
+
+test("check_triage_requirements accepts generic decompiler API backend", async () => {
+  const scriptPath = path.join(
+    process.cwd(),
+    "skills",
+    "pcl-invalidation-deep-dive",
+    "scripts",
+    "check_triage_requirements.py",
+  );
+
+  let stdout = "";
+  try {
+    await execFileAsync(
+      "python3",
+      [scriptPath, "--chain-id", "777777", "--require-decompiler", "--json"],
+      {
+        cwd: process.cwd(),
+        env: {
+          PATH: process.env.PATH ?? "",
+          EVM_DECOMPILER_API_URL: "http://127.0.0.1:7639/api/decompile",
+        },
+      },
+    );
+  } catch (error) {
+    stdout = error.stdout;
+    assert.equal(error.code, 2);
+  }
+
+  const report = JSON.parse(stdout);
+  const requirement = report.requirements.find((item) => item.name === "decompiler_backend");
+  assert.equal(requirement.configured, true);
+  assert.equal(requirement.ok, true);
+  assert.equal(requirement.selected_source, "EVM_DECOMPILER_API_URL");
+});
+
+test("check_triage_requirements accepts Dedaub API key for native Dedaub access", async () => {
+  const scriptPath = path.join(
+    process.cwd(),
+    "skills",
+    "pcl-invalidation-deep-dive",
+    "scripts",
+    "check_triage_requirements.py",
+  );
+
+  let stdout = "";
+  try {
+    await execFileAsync(
+      "python3",
+      [scriptPath, "--chain-id", "777777", "--require-decompiler", "--json"],
+      {
+        cwd: process.cwd(),
+        env: {
+          PATH: process.env.PATH ?? "",
+          DEDAUB_API_KEY: "test-key",
+        },
+      },
+    );
+  } catch (error) {
+    stdout = error.stdout;
+    assert.equal(error.code, 2);
+  }
+
+  const report = JSON.parse(stdout);
+  const requirement = report.requirements.find((item) => item.name === "decompiler_backend");
+  assert.equal(requirement.configured, true);
+  assert.equal(requirement.ok, true);
+  assert.equal(requirement.selected_source, "DEDAUB_API_KEY");
+});
+
 test("collect_contract_context ignores non-address hex substrings", async () => {
   const tempDir = await mkdtemp(path.join(tmpdir(), "pcl-contract-context-"));
   const tracePath = path.join(tempDir, "trace.txt");
