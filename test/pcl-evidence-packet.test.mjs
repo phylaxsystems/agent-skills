@@ -15,7 +15,9 @@ test("build_evidence_packet writes compact report-agent packet", async () => {
   const normalizedPath = path.join(tempDir, "normalized.json");
   const contextPath = path.join(tempDir, "contract_context_manifest.json");
   const decompilationPath = path.join(tempDir, "heimdall_decompilation_manifest.json");
+  const statePath = path.join(tempDir, "state_reads.json");
   const outPath = path.join(tempDir, "evidence_packet.md");
+  const reportPath = path.join(tempDir, "final_report.md");
 
   const token = `0x${"1".repeat(40)}`;
   const owner = `0x${"2".repeat(40)}`;
@@ -120,6 +122,26 @@ test("build_evidence_packet writes compact report-agent packet", async () => {
       results: [{ address: wrapper, status: "completed", reason: "unverified", output_dir: tempDir }],
     }),
   );
+  await writeFile(
+    statePath,
+    JSON.stringify({
+      transaction: null,
+      receipt: null,
+      tokens: { [token]: { symbol: "USDC", decimals: 6 } },
+      reads: [
+        {
+          token,
+          source_owner: owner,
+          recipient,
+          raw_attempted_amount: "1071751815",
+          balance_at_block: "1071751815",
+          balance_latest: "1071751815",
+          allowance_latest:
+            "115792089237316195423570985008687907853269984665640564039457584007913129639935",
+        },
+      ],
+    }),
+  );
 
   const scriptPath = path.join(
     process.cwd(),
@@ -148,6 +170,8 @@ test("build_evidence_packet writes compact report-agent packet", async () => {
     contextPath,
     "--decompilation-manifest",
     decompilationPath,
+    "--aux-file",
+    `state reads=${statePath}`,
     "--pcl-tx-id",
     "tx-1",
     "--out",
@@ -157,8 +181,41 @@ test("build_evidence_packet writes compact report-agent packet", async () => {
   const packet = await readFile(outPath, "utf8");
   assert.match(packet, /Use this compact packet first/);
   assert.match(packet, /Do not refetch PCL list\/detail\/trace data/);
+  assert.match(packet, /target under 90 seconds/);
+  assert.match(packet, /Do not do local Homebrew\/formula\/version checks/);
+  assert.match(packet, /If a non-critical check is missing, list it as a gap/);
   assert.match(packet, /Full Improved Trace/);
+  assert.match(packet, /state reads: `state_reads\.json`/);
+  assert.match(packet, /Read listed auxiliary state, receipt, price, and previous-transaction files/);
   assert.match(packet, /Transfer from address with non-zero allowance to adopter/);
   assert.match(packet, /Incident invalidating tx count from detail: `2`/);
   assert.match(packet, /1,071\.751815 token units/);
+
+  const renderScriptPath = path.join(
+    process.cwd(),
+    "skills",
+    "pcl-invalidation-deep-dive",
+    "scripts",
+    "render_fast_report.py",
+  );
+  const { stdout } = await execFileAsync("python3", [
+    renderScriptPath,
+    "--packet",
+    outPath,
+    "--run-dir",
+    tempDir,
+    "--out",
+    reportPath,
+  ]);
+  const renderResult = JSON.parse(stdout);
+  assert.ok(renderResult.elapsed_ms < 1000);
+
+  const report = await readFile(reportPath, "utf8");
+  assert.match(report, /Full Improved Trace/);
+  assert.match(report, /Actual landed loss/);
+  assert.match(report, /Unique protected value/);
+  assert.match(report, /Transfer from address with non-zero allowance to adopter/);
+  const settlerLine = report.split("\n").find((line) => line.includes("participant Settler"));
+  assert.ok(settlerLine);
+  assert.doesNotMatch(settlerLine, /`0x/);
 });

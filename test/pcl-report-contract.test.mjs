@@ -13,6 +13,9 @@ test("pcl invalidation report contract uses one full improved trace", async () =
   assert.match(combined, /Full Improved Trace/);
   assert.match(combined, /one ordered trace that combines the transaction execution and assertion evaluation/);
   assert.match(combined, /The trace must be a single ordered narrative/);
+  assert.match(combined, /Fast Packet-Only Report Mode/);
+  assert.match(combined, /Target under 90 seconds/);
+  assert.match(combined, /Keep the main report to about 1,200-1,800 words/);
 
   assert.doesNotMatch(combined, /Improved Transaction Trace/);
   assert.doesNotMatch(combined, /Improved Assertion Trace/);

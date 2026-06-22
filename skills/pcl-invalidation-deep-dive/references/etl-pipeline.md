@@ -147,10 +147,23 @@ scripts/build_evidence_packet.py \
   --normalized-json normalized_traces.json \
   --contract-context contract_context/contract_context_manifest.json \
   --decompilation-manifest decompiled/heimdall_decompilation_manifest.json \
+  --aux-file "state reads=state_reads.json" \
+  --aux-file "previous sender txs=previous_tx.json" \
+  --aux-file "price snapshot=prices.json" \
   --out evidence_packet.md
 ```
 
-Use `evidence_packet.md` as the primary input for report writing or spawned report agents. The report agent should open raw JSON only to verify exact call order, quote exact trace lines, or resolve explicit gaps. Do not refetch PCL list/detail/trace data when the packet already lists consistent artifacts.
+Use `evidence_packet.md` as the primary input for report writing or spawned report agents. The report agent should read listed auxiliary state/receipt/price/previous-transaction files before doing live RPC or explorer calls, and should open raw JSON only to verify exact call order, quote exact trace lines, or resolve explicit gaps. Do not refetch PCL list/detail/trace data when the packet already lists consistent artifacts.
+
+Fast packet-only report targets:
+
+- Finish one completed-trace report in under 90 seconds after reading the packet.
+- Prefer the deterministic renderer first:
+  `scripts/render_fast_report.py --packet evidence_packet.md --run-dir <run-dir> --out final_report.md`.
+- Use only packet and auxiliary files by default.
+- Treat missing non-critical checks as gaps instead of live-fetching them.
+- Keep the main report around 1,200-1,800 words.
+- Use a concise 10-18 step `Full Improved Trace`; avoid dumping every storage write or every previous transaction.
 
 ## Stage 2A: Fast Batching and Split-Agent Pipeline
 

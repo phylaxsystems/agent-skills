@@ -72,6 +72,19 @@ If a multi-agent runner is available and the user asks for a deep pass, split th
 
 If no runner is available, execute the same phases sequentially. Do not let the report phase invent missing source, replay, or previous-transaction evidence.
 
+### Fast Packet-Only Report Mode
+
+Use this mode whenever an `evidence_packet.md` or equivalent prefetched packet is provided. This is the default for spawned report agents.
+
+- Prefer `scripts/render_fast_report.py --packet <evidence_packet.md> --run-dir <run-dir> --out <final_report.md>` to create the first report draft, then review/edit only if the deterministic draft misses an important packet fact.
+- Target under 90 seconds from packet read to saved report for one completed trace.
+- Read the evidence packet first, then only the listed auxiliary state/receipt/price/previous-transaction files.
+- Do not rerun PCL, source collection, decompilation, Homebrew formula checks, selector lookup, RPC, or explorer calls unless the packet has a blocking contradiction or the user explicitly asks for a deeper pass.
+- Do not open the raw trace JSON if the packet plus normalized trace already provide the call order, movement rows, assertion check, and revert reason. If exact order is still needed, open only the raw trace artifact and cite that as the reason.
+- Keep the main report to about 1,200-1,800 words for one invalidating tx. Use concise tables and a 10-18 step `Full Improved Trace`; list deeper source/decompiler details as artifact links or gaps.
+- If a desired verification is missing from the packet, report it as a gap instead of spending minutes fetching it.
+- Report wall time and either token usage or concrete byte counts. Do not perform local tooling checks solely to fill runtime metadata.
+
 ## Quick Workflow
 
 1. **Scope the incident**
@@ -107,7 +120,8 @@ If no runner is available, execute the same phases sequentially. Do not let the 
    - Treat contract source context as a required stage before root-cause analysis. Extract every address from transaction traces, assertion traces, transaction objects, created-contract lines, token proxy/implementation delegatecalls, and assertion/runtime helper calls.
    - Run `scripts/collect_contract_context.py --chain-id <chain-id> --out-dir contract_context trace_*.json` after traces are saved. Provide `--rpc-url` explicitly or rely on current env. It fetches bytecode, Etherscan V2 source, Sourcify source, and emits `contract_context_manifest.json` with unverified decompiler targets.
    - When `contract_context_manifest.json` has bytecode-backed `decompiler_targets`, run `scripts/run_heimdall_decompiler.py contract_context/contract_context_manifest.json --out-dir decompiled --require-success`. Heimdall-rs is the only supported decompiler path for this skill. Install `heimdall` on PATH or set `HEIMDALL_BIN=/absolute/path/to/heimdall`.
-   - After normalization, contract context, decompilation, and targeted replay/state reads, run `scripts/build_evidence_packet.py --run-dir <run-dir> --incident-json <incident.json> --trace-json <trace.json> --normalized-json <normalized.json> --contract-context <manifest.json> --decompilation-manifest <heimdall_manifest.json> --out evidence_packet.md`. Use the packet as the report agent's primary input.
+   - After normalization, contract context, decompilation, and targeted replay/state reads, run `scripts/build_evidence_packet.py --run-dir <run-dir> --incident-json <incident.json> --trace-json <trace.json> --normalized-json <normalized.json> --contract-context <manifest.json> --decompilation-manifest <heimdall_manifest.json> --aux-file "state reads=state_reads.json" --aux-file "previous sender txs=previous_tx.json" --out evidence_packet.md`. Use the packet as the report agent's primary input.
+   - For a fast single-trace report, run `scripts/render_fast_report.py --packet evidence_packet.md --run-dir <run-dir> --out final_report.md` before any free-form writing. Review the draft for obvious errors and only then add concise human improvements.
    - If an evidence packet is already provided, read it first and treat listed artifacts as prefetched. Do not rerun `pcl search`, incident list/detail, trace fetch, source collection, or decompilation unless a listed artifact is missing, stale, or inconsistent with the request.
    - The contract-context helper exits with the exact missing JSON-RPC requirement when no RPC is configured. Use `--allow-missing-rpc` only when explicitly accepting a degraded source-only packet, then list that as a confidence gap.
    - For contracts created inside a non-landed PCL simulation, `eth_getCode(latest)` may return no code. Treat these as transient created-contract gaps, then recover init/runtime bytecode from trace output, calldata, replay, or decompiler tooling before relying on that route for RCA.
@@ -264,5 +278,7 @@ Use this order:
    - Value and exposure: actual loss, unique protected value, repeated blocked attempt volume, unverified estimates, remaining balances/allowances/ownership/state exposure.
    - Open gaps and confidence: failed/pending traces, missing source/ABI, unpriced assets, and what would improve confidence.
    - Runtime and usage: report wall-clock time. If token usage is unavailable, report compact packet size, key artifact bytes loaded or referenced, and output size instead of guessing.
+
+In fast packet-only mode, keep the same section order but compress aggressively. Preserve the `Full Improved Trace` and value/exposure sections; shorten source/decompiler and previous-transaction discussion when they are not decisive.
 
 Avoid generic security advice unless the user asks. Prioritize the concrete mechanism, value, what happened, why it was stopped, and exactly what to check or revoke now.

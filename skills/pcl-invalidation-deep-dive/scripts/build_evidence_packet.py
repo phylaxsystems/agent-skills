@@ -147,6 +147,17 @@ def artifact_line(label: str, path: Path | None, run_dir: Path) -> str | None:
     return f"- {label}: `{rel(path, run_dir)}`"
 
 
+def parse_aux_file(value: str) -> tuple[str, Path]:
+    if "=" not in value:
+        raise argparse.ArgumentTypeError("--aux-file must be LABEL=PATH")
+    label, path = value.split("=", 1)
+    label = label.strip()
+    path = path.strip()
+    if not label or not path:
+        raise argparse.ArgumentTypeError("--aux-file must include a non-empty label and path")
+    return label, Path(path)
+
+
 def build_packet(args: argparse.Namespace) -> str:
     run_dir = args.run_dir.resolve()
     incident_raw = load_json(args.incident_json)
@@ -209,6 +220,8 @@ def build_packet(args: argparse.Namespace) -> str:
     ]:
         if item:
             lines.append(item)
+    for label, path in args.aux_file:
+        lines.append(f"- {label}: `{rel(path, run_dir)}`")
 
     lines.extend(
         [
@@ -265,11 +278,15 @@ def build_packet(args: argparse.Namespace) -> str:
             "## Report-Agent Instructions",
             "",
             "- Produce one production-style triage report from this packet.",
+            "- Fast packet-only mode is the default: target under 90 seconds for one completed trace and keep the main report around 1,200-1,800 words.",
+            "- Prefer `scripts/render_fast_report.py --packet <this file> --run-dir <run-dir> --out <final_report.md>` for the first draft, then review briefly.",
             "- Do not refetch PCL list/detail/trace data unless a listed artifact is missing or inconsistent.",
+            "- Read listed auxiliary state, receipt, price, and previous-transaction files before doing live RPC or explorer calls.",
+            "- Do not do local Homebrew/formula/version checks, selector lookups, RPC calls, explorer calls, or raw-trace reads unless the packet is insufficient for a required claim.",
             "- Open the raw trace only for exact call ordering, selector details, or disputed evidence.",
             "- Use one `Full Improved Trace` section that combines transaction execution and assertion evaluation in order.",
             "- If this packet covers only one PCL tx but the incident has more txs, say the report is selected-tx scoped and list uncovered txs as gaps.",
-            "- Run only narrowly targeted RPC/explorer reads that are not already present in the packet, such as receipt/null check, previous sender tx, token metadata, balance/allowance at block and latest, or price.",
+            "- If a non-critical check is missing, list it as a gap instead of spending minutes fetching it.",
             "- Report wall-clock time and token usage if exposed. If token usage is unavailable, report packet size, key artifact size, and output size.",
             "",
             "## Coverage Gaps to Check",
@@ -299,6 +316,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--incident-id")
     parser.add_argument("--pcl-tx-id")
     parser.add_argument("--assertion")
+    parser.add_argument(
+        "--aux-file",
+        action="append",
+        default=[],
+        type=parse_aux_file,
+        metavar="LABEL=PATH",
+        help="Additional prefetched evidence file to list in the packet, such as state reads or previous tx history.",
+    )
     return parser.parse_args()
 
 
