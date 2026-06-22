@@ -29,10 +29,62 @@ CHAIN_RPC_ENV = {
     "1": "ETH_RPC_URL",
     "10": "OPTIMISM_RPC_URL",
     "137": "POLYGON_RPC_URL",
+    "324": "ZKSYNC_RPC_URL",
+    "43114": "AVALANCHE_RPC_URL",
     "42161": "ARBITRUM_RPC_URL",
     "8453": "BASE_RPC_URL",
+    "100": "GNOSIS_RPC_URL",
+    "5000": "MANTLE_RPC_URL",
+    "534352": "SCROLL_RPC_URL",
     "59144": "LINEA_RPC_URL",
+    "81457": "BLAST_RPC_URL",
 }
+
+EXPLORER_ENV_VARS = [
+    "ETHERSCAN_API_KEY",
+    "EXPLORER_API_KEY",
+    "BLOCKSCOUT_API_KEY",
+    "LINEASCAN_API_KEY",
+    "BASESCAN_API_KEY",
+    "ARBISCAN_API_KEY",
+    "OPTIMISTIC_ETHERSCAN_API_KEY",
+    "POLYGONSCAN_API_KEY",
+    "BSCSCAN_API_KEY",
+    "SNOWTRACE_API_KEY",
+    "GNOSISSCAN_API_KEY",
+    "CELOSCAN_API_KEY",
+    "SCROLLSCAN_API_KEY",
+]
+
+DECOMPILER_ENV_VARS = [
+    "DEDAUB_API_KEY",
+    "DEDAUB_API_URL",
+    "DEDAUB_DECOMPILE_CMD",
+    "EVM_DECOMPILER_API_URL",
+    "EVM_DECOMPILER_CMD",
+    "DECOMPILER_CMD",
+]
+
+
+def unique(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    result = []
+    for value in values:
+        if value in seen:
+            continue
+        seen.add(value)
+        result.append(value)
+    return result
+
+
+def chain_rpc_env_names(chain_id: str) -> list[str]:
+    names = [
+        CHAIN_RPC_ENV.get(chain_id),
+        f"CHAIN_{chain_id}_RPC_URL",
+        f"RPC_URL_{chain_id}",
+        f"EVM_{chain_id}_RPC_URL",
+    ]
+    return unique([name for name in names if name])
 
 
 def rpc_candidates(chain_id: str, explicit: str | None) -> list[dict[str, str]]:
@@ -40,9 +92,9 @@ def rpc_candidates(chain_id: str, explicit: str | None) -> list[dict[str, str]]:
     if explicit:
         candidates.append({"source": "--rpc-url", "url": explicit})
 
-    chain_env = CHAIN_RPC_ENV.get(chain_id)
-    if chain_env and os.getenv(chain_env):
-        candidates.append({"source": chain_env, "url": os.getenv(chain_env, "")})
+    for chain_env in chain_rpc_env_names(chain_id):
+        if os.getenv(chain_env):
+            candidates.append({"source": chain_env, "url": os.getenv(chain_env, "")})
 
     if os.getenv("RPC_URL"):
         candidates.append({"source": "RPC_URL", "url": os.getenv("RPC_URL", "")})
@@ -75,13 +127,13 @@ def check_rpc(chain_id: str, explicit: str | None) -> dict[str, Any]:
         "name": "chain_rpc",
         "required_for": [
             "eth_getCode contract/EOA classification",
-            "block-pinned balances and allowances",
+            "block-pinned balances, ownership, approvals, and protocol state",
             "receipt/log/transaction verification",
             "replay/debug trace when supported",
         ],
         "acceptable_configuration": [
             "--rpc-url <url>",
-            CHAIN_RPC_ENV.get(chain_id) or "<CHAIN>_RPC_URL",
+            *chain_rpc_env_names(chain_id),
             "RPC_URL",
             "ALCHEMY_API_KEY for supported chains",
         ],
@@ -174,24 +226,24 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Fail fast when local triage requirements are missing.")
     parser.add_argument("--chain-id", required=True, help="EVM chain id, e.g. 59144")
     parser.add_argument("--rpc-url", default=None, help="Explicit RPC URL. Secrets are not printed.")
-    parser.add_argument("--require-explorer", action="store_true", help="Fail if Etherscan v2 API access is absent.")
-    parser.add_argument("--require-decompiler", action="store_true", help="Fail if Dedaub/comparable decompiler config is absent.")
+    parser.add_argument("--require-explorer", action="store_true", help="Fail if explorer/source API access is absent.")
+    parser.add_argument("--require-decompiler", action="store_true", help="Fail if decompiler config is absent.")
     parser.add_argument("--json", action="store_true", help="Emit JSON instead of text.")
     args = parser.parse_args()
 
     requirements = [
         tool_requirement("pcl_cli", "pcl", ["platform auth", "incident detail", "trace retrieval"]),
-        tool_requirement("foundry_cast", "cast", ["selector decoding", "RPC calls", "balance/allowance reads", "replay checks"]),
+        tool_requirement("foundry_cast", "cast", ["selector decoding", "calldata decoding", "RPC calls", "state reads", "replay checks"]),
         check_rpc(args.chain_id, args.rpc_url),
         env_requirement(
             "explorer_api",
-            ["ETHERSCAN_API_KEY", "LINEASCAN_API_KEY", "BASESCAN_API_KEY", "ARBISCAN_API_KEY"],
+            EXPLORER_ENV_VARS,
             ["verified source/ABI", "previous transaction lookup", "public explorer evidence"],
             args.require_explorer,
         ),
         env_requirement(
             "decompiler_api",
-            ["DEDAUB_API_KEY", "DEDAUB_API_URL", "DEDAUB_DECOMPILE_CMD"],
+            DECOMPILER_ENV_VARS,
             ["unverified runtime bytecode", "transient contract bytecode review", "source-gap reduction"],
             args.require_decompiler,
         ),

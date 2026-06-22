@@ -83,7 +83,7 @@ Local production-style triage for PCL/Credible Layer invalidations, blocked expl
 Use when:
 - A user gets a new invalidation and needs to know what the dropped transaction attempted
 - Estimating actual loss, unique protected value, repeated blocked volume, or failed-trace gaps
-- Investigating `0x-settler`, `AllowanceAssertion`, `LineaSettler`, allowance drains, or blocked exploit attempts
+- Investigating blocked exploit attempts, false positives, failed traces, allowance drains, NFT/operator approval issues, bridge/router/vault flows, privileged calls, or protocol-state invalidations
 
 ### assertion-troubleshooting
 Diagnose non-triggering assertions and common failures.

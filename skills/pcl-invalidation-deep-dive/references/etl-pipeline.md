@@ -95,8 +95,8 @@ Required context:
 - Source/ABI for all touched contracts when verified source is available.
 - Source/ABI for contracts created during the transaction.
 - Decompiled or reconstructed code for important unverified code-bearing contracts when verified source is unavailable.
-- Token metadata for all token contracts in calls/logs.
-- Balance and allowance reads at the relevant block and latest block.
+- Asset metadata for token/NFT/vault/share contracts in calls/logs.
+- Relevant block-pinned state reads: balances, allowances, owners/operators, vault shares, protocol account state, or storage slots used by the assertion.
 
 Optional context:
 
@@ -128,6 +128,8 @@ contract_context/contract_context_manifest.json
 decompiled/<chain>/<address>/*
 token_metadata.json
 balances_allowances.json
+ownership_operator_state.json
+protocol_state_reads.json
 ```
 
 ## Stage 2A: Fast Batching and Split-Agent Pipeline
@@ -150,7 +152,7 @@ For larger windows:
 Suggested route/signature:
 
 ```text
-(outer_target, outer_selector, adopter, assertion_id, token, source_owners, recipient, decoded_revert_reason)
+(outer_target, outer_selector, adopter, assertion_id, touched_assets_or_state, source_accounts, beneficiaries, decoded_revert_reason)
 ```
 
 When a multi-agent runner is available and the user asks for a deep pass, split the pipeline:
@@ -168,29 +170,29 @@ For each transaction trace:
 - Strip ANSI before parsing.
 - If `transaction_trace_content` and `assertion_trace_content` are null, split combined `trace_content` on headings such as `Transaction Trace` and `Assertion Trace`.
 - Save trace JSON artifacts with both the incident id and PCL transaction id in the filename. Some trace endpoints return the PCL transaction object but not the incident id; the normalizer can infer full UUIDs from `trace_<incident-id>_<pcl-tx-id>.json` filenames.
-- Prefer running `scripts/normalize_pcl_trace.py --pretty trace_*.json > normalized_traces.json` before manual reasoning. It extracts non-delegatecall token calls, ERC20/WETH/ERC4626 events, event-level balance deltas, and allowance checks into JSON. Treat it as a parsing aid, not a replacement for raw trace inspection.
-- Count only non-delegatecall token calls for direct attempted transfer accounting.
-- Prefer emitted `Transfer` logs and token `transferFrom` calls over raw calldata guesses.
+- Prefer running `scripts/normalize_pcl_trace.py --pretty trace_*.json > normalized_traces.json` before manual reasoning. It extracts non-delegatecall token calls, ERC20/ERC721/ERC1155/WETH/ERC4626 events, event-level deltas, non-fungible movements, and allowance checks into JSON. Treat it as a parsing aid, not a replacement for raw trace inspection.
+- Count only non-delegatecall calls/events for direct attempted movement accounting.
+- Prefer emitted asset/protocol events and executed calls over raw calldata guesses.
 - Keep assertion trace separate from transaction trace.
 - Preserve revert reason.
 
-For ERC-20 drain attempts, extract:
+For asset-movement attempts, extract:
 
-- token contract
+- asset contract and standard when known
 - source owner/from
-- recipient/to
-- raw amount
-- event-level balance deltas from ERC20 `Transfer`, WETH `Deposit`/`Withdrawal`, and ERC4626 `Deposit`/`Withdraw` events
-- decimals
+- recipient/to/beneficiary
+- raw amount for fungible assets, token id for ERC721/ERC1155, or state key for protocol-state changes
+- event-level balance deltas from ERC20 `Transfer`, WETH `Deposit`/`Withdrawal`, ERC4626 `Deposit`/`Withdraw`, and non-fungible transfer events
+- decimals or asset id metadata
 - tx hash/id
 - incident id/window
 
 Role mapping:
 
 - Do not infer the victim/source from `transaction_data.from_address`.
-- Extract the token source owner from `transferFrom(source, recipient, amount)` and from `Transfer(from, to, amount)` logs.
-- Track transaction sender, outer call target, created contracts, assertion adopter/spender, token source owner, and recipient as separate roles.
-- For exposure checks, query balances and allowances for the trace source owner and assertion adopter/spender.
+- Extract source owners from executed calls and emitted events, such as `transferFrom(source, recipient, amount)`, `Transfer(from, to, amount)`, `ownerOf(tokenId)`, or protocol account/state reads.
+- Track transaction sender, outer call target, created contracts, assertion adopter/spender, asset owner, protocol account, recipient/beneficiary, and privileged caller as separate roles.
+- For exposure checks, query the state relevant to the mechanism: balances and allowances for fungible drains, owner/operator approvals for NFTs/ERC1155s, vault shares/assets for ERC4626, and protocol storage/account state for custom assertions.
 
 Avoid double counting:
 
@@ -200,6 +202,7 @@ Avoid double counting:
 - approvals
 - repeated balance reads
 - bridge/router internal accounting transfers
+- protocol internal bookkeeping that does not change external ownership or extractable value
 
 ## Stage 4: Trace Readability Enrichment
 
@@ -208,16 +211,18 @@ Produce a readable trace summary even when raw trace output is noisy.
 Resolve names:
 
 - Contract source name from explorer source metadata.
-- Token symbol/name/decimals from ERC20 calls.
+- Asset symbol/name/decimals/token ids from token standards or metadata calls.
 - Common router/pool names from explorer labels.
 - Created contract names from source or bytecode/decompiler hints.
 
 Decode events and common calls:
 
 - ERC20: `Transfer`, `Approval`, `transfer`, `transferFrom`, `approve`.
+- ERC721: `Transfer`, `Approval`, `ApprovalForAll`, `ownerOf`, `getApproved`, `isApprovedForAll`, `safeTransferFrom`.
+- ERC1155: `TransferSingle`, `TransferBatch`, `ApprovalForAll`, `balanceOf`, `safeTransferFrom`.
 - WETH-like: `Deposit`, `Withdrawal`.
 - ERC4626: `Deposit`, `Withdraw`.
-- Router calls: `swap`, `exactInput`, `swapExactTokensForTokens`, protocol-specific settlement calls.
+- Router/vault/bridge/lending calls: `swap`, `exactInput`, `deposit`, `withdraw`, `borrow`, `repay`, `liquidate`, `bridge`, `claim`, and protocol-specific settlement calls.
 - Assertion calls and revert reason.
 
 Formatting rules:
@@ -230,15 +235,15 @@ Formatting rules:
 Readable trace line example:
 
 ```text
-USDC.transferFrom(from: 0xaaa..., to: LineaSettler, amount: 1,071.751815 USDC)
-ERC20.Transfer(from: 0xaaa..., to: LineaSettler, amount: 1,071.751815 USDC)
+USDC.transferFrom(from: 0xaaa..., to: ProtectedSpender, amount: 1,071.751815 USDC)
+ERC721.Transfer(from: 0xbbb..., to: 0xccc..., tokenId: 42)
 ```
 
 Readable balance-change row example:
 
 ```text
 balance_change token=USDC event=ERC20.Transfer address=0xaaa... delta=-1,071.751815 USDC raw=-1071751815
-balance_change token=USDC event=ERC20.Transfer address=LineaSettler delta=+1,071.751815 USDC raw=1071751815
+asset_movement token=CoolNFT event=ERC721.Transfer from=0xbbb... to=0xccc... token_id=42
 ```
 
 ## Stage 4A: Source and Decompiler Context
@@ -259,6 +264,7 @@ Recommended command:
 scripts/collect_contract_context.py \
   --chain-id <chain-id> \
   --rpc-url <rpc-url> \
+  --explorer-api-key <etherscan-v2-compatible-key> \
   --out-dir contract_context \
   trace_*.json
 ```
@@ -322,7 +328,7 @@ Use chain data to validate PCL:
 - RPC `eth_getTransactionByHash` and receipt.
 - `debug_traceTransaction`, `trace_transaction`, or `trace_call` with block context.
 - Logs by tx and token `Transfer` event topics.
-- Token balances and allowances at the relevant block and latest block.
+- Asset balances, allowances, owners/operators, and relevant protocol state at the relevant block and latest block.
 - Contract source/ABI from Etherscan v2 or the chain explorer.
 - Contract creation tx and labels for attacker, recipient, router, adopter, token, pool, bridge.
 
@@ -330,22 +336,27 @@ Useful environment variables:
 
 - `ALCHEMY_API_KEY`
 - `ETHERSCAN_API_KEY`
+- `EXPLORER_API_KEY`
+- `BLOCKSCOUT_API_KEY`
 - `LINEASCAN_API_KEY`
 - `BASESCAN_API_KEY`
 - `ARBISCAN_API_KEY`
-- chain-specific `RPC_URL` overrides
+- chain-specific RPC overrides such as `LINEA_RPC_URL`
+- generic chain-id RPC overrides such as `CHAIN_<chain_id>_RPC_URL`, `RPC_URL_<chain_id>`, or `EVM_<chain_id>_RPC_URL`
 
 RPC discovery order:
 
-1. Explicit chain RPC env var, such as `LINEA_RPC_URL`.
-2. Generic `RPC_URL`.
-3. Derived Alchemy URL from `ALCHEMY_API_KEY` when the chain is known.
-4. Public RPC fallback only for basic reads; label it as non-archive/non-debug unless verified otherwise.
+1. Explicit `--rpc-url`.
+2. Explicit chain RPC env var, such as `LINEA_RPC_URL`.
+3. Generic chain-id RPC env var, such as `CHAIN_59144_RPC_URL`.
+4. Generic `RPC_URL`.
+5. Derived Alchemy URL from `ALCHEMY_API_KEY` when the chain is known.
+6. Public RPC fallback only for basic reads; label it as non-archive/non-debug unless verified otherwise.
 
-When `ALCHEMY_API_KEY` exists but no explicit RPC URL is set, derive the chain endpoint from chain id/name when safe, for example Linea mainnet (`59144`) as:
+When `ALCHEMY_API_KEY` exists but no explicit RPC URL is set, derive the chain endpoint from chain id/name only when the helper has a known mapping. Do not guess provider hostnames for unknown chains.
 
 ```bash
-https://linea-mainnet.g.alchemy.com/v2/$ALCHEMY_API_KEY
+https://<known-alchemy-host>/v2/$ALCHEMY_API_KEY
 ```
 
 Check only whether secrets are present; do not print API keys in reports or artifacts. Do not claim an env var is missing unless you checked it in the current shell.
@@ -353,7 +364,7 @@ Check only whether secrets are present; do not print API keys in reports or arti
 Explorer/source lookup order:
 
 1. Etherscan v2 if `ETHERSCAN_API_KEY` is available and the chain id is supported.
-2. Chain-specific explorer API, such as Lineascan, if configured.
+2. Chain-specific or Blockscout-style explorer API if configured.
 3. `cast 4byte <selector>` for selectors.
 4. Public explorer links for manual follow-up.
 5. Dedaub/decompiler only when verified source is unavailable and deeper root cause requires it.
@@ -377,7 +388,7 @@ Use the closest previous tx from the same sender unless a stronger source-specif
 Bounded multi-block lookback:
 
 - Check the sender's previous tx.
-- Check recent approvals/transfers involving the source owner, spender/adopter, token, recipient, and route if the invalidation suggests a multi-block exploit.
+- Check recent approvals/transfers or state changes involving the source owner/account, spender/operator/adopter, asset/protocol contract, recipient/beneficiary, and route if the invalidation suggests a multi-block exploit.
 - Keep the window explicit, for example "previous 100 blocks" or "previous 24h".
 - Stop expanding when it no longer changes the verdict or next action; list the unsearched surface as a gap.
 
@@ -388,6 +399,7 @@ Explorer/RPC evidence should answer:
 - Did the tx land?
 - What would have moved if invalidation did not stop it?
 - Was it allowance abuse, a signed owner action, privileged call, route abuse, or a protocol logic bug?
+- Did it affect fungible balances, ownership/operator rights, protocol accounting/state, or only internal routing?
 - Is the same route still exploitable?
 
 ## Stage 7: Replay and Simulation
@@ -406,6 +418,8 @@ cast call <token> 'symbol()(string)' --rpc-url <url>
 cast call <token> 'decimals()(uint8)' --rpc-url <url>
 cast call <token> 'balanceOf(address)(uint256)' <owner> --block <block> --rpc-url <url>
 cast call <token> 'allowance(address,address)(uint256)' <owner> <spender> --block <block> --rpc-url <url>
+cast call <nft> 'ownerOf(uint256)(address)' <token_id> --block <block> --rpc-url <url>
+cast call <nft> 'isApprovedForAll(address,address)(bool)' <owner> <operator> --block <block> --rpc-url <url>
 cast run <hash> --rpc-url <url>
 ```
 
@@ -413,7 +427,7 @@ Use `cast run` or `debug_traceTransaction` for landed or replayable transactions
 
 Replay goals:
 
-- Confirm whether source balances and allowances made the attempted drain feasible.
+- Confirm whether balances, allowances, ownership/operator approvals, vault shares, or protocol state made the attempted action feasible.
 - Confirm the assertion reverted for the claimed reason.
 - Identify whether the transaction was a malicious pull, benign route, assertion false positive, or inconclusive.
 - Identify all contracts created or touched by the tx.
@@ -426,20 +440,23 @@ Produce at most three headline numbers:
 
 1. **Actual loss**: landed on-chain value transferred out.
 2. **Unique protected value**: deduped source balances blocked by the invalidation.
-3. **Repeated blocked attempt volume**: all repeated attempts, including retries.
+3. **Repeated blocked attempt volume**: all repeated fungible attempts, including retries.
+
+For NFTs, ERC1155s, or protocol state, add a separate count/list of protected token ids or state changes. Do not force a USD estimate unless there is a sourced price or explicit valuation model.
 
 Rules:
 
 - Use raw integer math as long as possible.
-- Normalize by token decimals from chain metadata.
-- Price by chain token address.
+- Normalize by token decimals from chain metadata for fungible assets.
+- Price by chain asset address and token id where applicable.
 - For current/internal reads, current DeFiLlama marks are acceptable and should be labeled.
 - For public incident reports, prefer block-time prices or a fixed timestamp price.
 - Mark lower bounds when traces are missing or unpriced.
 
 Dedupe default:
 
-- Key by `(chain_id, token_address, source_owner)`.
+- Key fungible assets by `(chain_id, token_address, source_owner)`.
+- Key non-fungible assets by `(chain_id, token_address, token_id, source_owner)`.
 - Use the maximum observed raw attempted amount per key.
 - If balances change over time, split by block/time window and explain.
 
@@ -451,7 +468,7 @@ Repeated volume default:
 Multi-incident grouping:
 
 - Group repeated invalidations by route/signature before writing the report.
-- Suggested signature: `(outer_target, outer_selector, adopter, assertion_id, token, sorted(source_owners), recipient, decoded_revert_reason)`.
+- Suggested signature: `(outer_target, outer_selector, adopter, assertion_id, touched_assets_or_state, sorted(source_accounts), beneficiaries, decoded_revert_reason)`.
 - Render one representative improved transaction trace per group, then list every `(incident_id, pcl_tx_id, hash, block, trace_status)` in the transaction-object table.
 - If a group contains a failed/no-trace retry, keep it in the group only as an unverified estimate unless calldata or RPC independently verifies the same movement.
 - If balances or recipients differ materially, split into a separate group.
@@ -462,6 +479,8 @@ When an assertion checks non-zero allowance to an adopter, report both:
 - **Remaining exposure** from latest balance and allowance reads for the same source owner/spender.
 
 If a balance is still present and allowance is still non-zero or effectively infinite, recommend a concrete revoke/check action even if the invalidation blocked the attempted transfer.
+
+When an assertion checks ownership, operator approvals, privileged roles, vault shares, or protocol storage, report the equivalent remaining exposure: current owner/operator, role holder, share balance, debt/collateral state, oracle value, or storage slot value at the relevant block and latest.
 
 ## Stage 9: Verdict and Recommended Action
 
@@ -496,11 +515,13 @@ Use evidence, not labels:
 
 - **Allowance abuse**: `transferFrom` from source owner by adopter/spender, non-zero allowance, no source-owner signed transfer.
 - **Permit2 / AllowanceHolder issue**: route uses Permit2/AllowanceHolder approvals or spender plumbing.
+- **NFT/operator approval abuse**: `safeTransferFrom`/`transferFrom` or ERC1155 transfer by an approved operator rather than the owner.
 - **Router/path abuse**: malicious route or callback reaches adopter/router in a way assertions disallow.
 - **Key compromise**: source EOA signs transfers/approvals directly.
 - **Privileged abuse**: admin/owner/minter/upgrader role call enables transfer or mint.
 - **Accounting/oracle bug**: protocol state update lets attacker extract without matching backing.
 - **Bridge/route issue**: payload attempts bridgeable exit or cross-chain route.
+- **State-only invariant break**: no immediate transfer, but assertion stopped a harmful storage/accounting transition.
 
 State confidence and what would raise it.
 
@@ -509,6 +530,7 @@ State confidence and what would raise it.
 For the affected user/project, check:
 
 - Is any approval still live for the adopter/spender/router?
+- Is any operator approval, privileged role, or protocol state exposure still live?
 - Does the source wallet still hold funds?
 - Have the same attacker recipients retried?
 - Are there more invalidations after the cutoff?
@@ -519,7 +541,7 @@ For the affected user/project, check:
 Recommended immediate outputs:
 
 - addresses to revoke approvals for
-- token contracts involved
+- token/NFT/protocol contracts involved
 - tx hashes to inspect/share
 - whether to pause a route, disable an integration, or notify users
 
@@ -536,7 +558,7 @@ Do not emit only a terse incident summary when the user asks to see the agentic 
 # Executive Summary
 
 Transaction
-<Plain-English explanation of what the dropped transaction attempted. Include the source owner, recipient, token, amount, route, created contracts, and whether it landed.>
+<Plain-English explanation of what the dropped transaction attempted. Include the source owner/account, recipient/beneficiary, asset or state touched, amount or ids, route, created contracts, and whether it landed.>
 
 Assertion
 <Assertion title/id, adopter, and exact invalidation/revert reason. Explain what the assertion checked.>
@@ -567,7 +589,7 @@ This triage was generated by an agent and can be wrong. Verify critical conclusi
 
 ## Detailed Transaction Explanation
 
-<Narrative that explains the transaction route, actors, token movements, temporary contracts, calldata selectors, and why source owner != tx sender if applicable.>
+<Narrative that explains the transaction route, actors, asset movements or protocol state changes, temporary contracts, calldata selectors, and why source owner/account != tx sender if applicable.>
 
 ```mermaid
 sequenceDiagram
@@ -575,25 +597,25 @@ sequenceDiagram
   actor Sender as Tx sender / recipient<br/><short address>
   participant Target as Outer target / deployer<br/><short address>
   participant Temp as Temporary contract(s)
-  participant Settler as Adopter / spender<br/><short address>
-  participant Token as Token<br/><symbol + short address>
-  participant Source as Source owner<br/><short address>
+  participant Protected as Protected contract<br/><short address>
+  participant Asset as Asset or state<br/><symbol/id + short address>
+  participant Source as Source account<br/><short address>
   participant Assertion as Assertion<br/><title>
 
   Sender->>Target: submit invalidating tx / deploy(...)
   Target->>Temp: create temporary executor
   Temp->>Source: balanceOf(source)
   Source-->>Temp: balance available
-  Temp->>Settler: execute(... encoded route ...)
-  Settler->>Token: transferFrom(source, recipient, amount)
-  Token-->>Settler: would emit Transfer(source, recipient, amount)
-  Note over Sender,Source: Source owner can differ from tx sender
-  Assertion->>Settler: getAssertionAdopter()
+  Temp->>Protected: execute(... encoded route ...)
+  Protected->>Asset: transfer/state change attempt
+  Asset-->>Protected: would emit event or update state
+  Note over Sender,Source: Source account can differ from tx sender
+  Assertion->>Protected: getAssertionAdopter()
   Assertion->>Assertion: inspect logs and call inputs
-  Assertion->>Token: allowance(source, adopter)
-  Token-->>Assertion: non-zero allowance
-  Assertion--xSettler: revert: <reason>
-  Note over Token,Assertion: Transaction is invalidated; no on-chain loss if landed_on_chain=false
+  Assertion->>Asset: read balance/owner/allowance/storage
+  Asset-->>Assertion: protected state observed
+  Assertion--xProtected: revert: <reason>
+  Note over Asset,Assertion: Transaction is invalidated; no on-chain loss if landed_on_chain=false
 ```
 
 Diagram rules:
@@ -609,7 +631,7 @@ Diagram rules:
 
 ## Root Cause Analysis
 
-<Evidence-backed mechanism: allowance abuse, Permit2/AllowanceHolder issue, router/path abuse, compromised key, false positive, etc. Include what would raise/lower confidence.>
+<Evidence-backed mechanism: allowance abuse, NFT/operator approval abuse, Permit2/AllowanceHolder issue, router/path abuse, compromised key, privileged call, protocol-state bug, false positive, etc. Include what would raise/lower confidence.>
 
 ## Source and Decompiler Context
 
@@ -650,9 +672,9 @@ For grouped repeated invalidations, show one representative improved trace per r
 
 ```solidity
 [gas] ContractName (0x...)::function(...)
-  ├─ Token (0x...)::transferFrom(...)
-  │   ├─ Token.transferFrom(from: <source>, to: <recipient>, amount: <pretty amount>)
-  │   ├─ ERC20.Transfer(from: <source>, to: <recipient>, amount: <pretty amount>)
+  ├─ AssetOrProtocol (0x...)::function(...)
+  │   ├─ movement/state read: <source/account> -> <recipient/beneficiary> <amount/id/state>
+  │   ├─ decoded event: <standard/event and fields>
   │   └─ delegatecall mirror ignored for accounting
 ```
 
@@ -663,7 +685,7 @@ AssertionContract::check()
   ├─ getAssertionAdopter() -> <adopter>
   ├─ getLogs() -> <decoded logs inspected>
   ├─ getCallInputs(<adopter>, <selector>) -> <decoded calls inspected>
-  ├─ Token.allowance(<source>, <adopter>) -> <value>
+  ├─ AssetOrProtocol.stateRead(<source/account>, <adopter>) -> <value>
   └─ Revert: <reason>
 ```
 
@@ -673,7 +695,7 @@ AssertionContract::check()
 - Unique protected value: <amount/USD>
 - Repeated blocked attempt volume: <amount/USD>
 - Unverified estimates: <amount/USD or none>
-- Remaining exposure: <source owners, balances, allowances, token, spender/adopter>
+- Remaining exposure: <source owners/accounts, balances, allowances, ownership/operator state, token ids, protocol state, spender/operator/adopter>
 
 ## Open Gaps and Confidence
 
@@ -696,11 +718,11 @@ After running the skill on live invalidations, review the result before reportin
 - Were incident rows keyed by `(incident_id, pcl_tx_id)`, not hash alone?
 - Were per-transaction `debug_traces[].status` values inspected?
 - Was combined `trace_content` split into transaction and assertion sections?
-- Were ERC20/WETH/ERC4626 events decoded into balance-change rows, not just described in prose?
+- Were ERC20/ERC721/ERC1155/WETH/ERC4626 events decoded into movement rows, not just described in prose?
 - Were delegatecall mirror transfers ignored for accounting?
 - Were `transferFrom` source owners separated from transaction senders?
 - Was the sender's previous transaction fetched or explicitly listed as unavailable?
 - Were transient created contracts handled separately from EOAs/no-code addresses?
-- Were token symbol/decimals, block-pinned balances, and allowances verified with RPC?
+- Were asset metadata, block-pinned balances/owners/operator approvals, and relevant protocol state verified with RPC?
 - Did the final output separate actual loss, unique protected value, repeated blocked volume, and unpriced gaps?
 - Did the next action name exact owner/spender/token addresses to revoke or inspect?

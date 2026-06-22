@@ -228,21 +228,55 @@ def classify_event(
     if name == "Transfer":
         from_address = params.get("from") or params.get("src") or params.get("param0")
         to_address = params.get("to") or params.get("dst") or params.get("param1")
-        amount = params.get("value") or params.get("wad") or params.get("amount") or params.get("param2")
+        token_id = params.get("tokenId") or params.get("id")
+        amount = params.get("value") or params.get("wad") or params.get("amount")
+        if token_id and not amount:
+            event.update(
+                {
+                    "standard": "ERC721",
+                    "from": from_address,
+                    "to": to_address,
+                    "token_id": token_id,
+                }
+            )
+        else:
+            amount = amount or params.get("param2")
+            event.update(
+                {
+                    "standard": "ERC20",
+                    "from": from_address,
+                    "to": to_address,
+                    "raw_amount": amount,
+                    "balance_changes": (
+                        [
+                            balance_delta(from_address, amount, -1, "ERC20.Transfer"),
+                            balance_delta(to_address, amount, 1, "ERC20.Transfer"),
+                        ]
+                        if from_address and to_address and amount
+                        else []
+                    ),
+                }
+            )
+    elif name == "TransferSingle":
         event.update(
             {
-                "standard": "ERC20",
-                "from": from_address,
-                "to": to_address,
-                "raw_amount": amount,
-                "balance_changes": (
-                    [
-                        balance_delta(from_address, amount, -1, "ERC20.Transfer"),
-                        balance_delta(to_address, amount, 1, "ERC20.Transfer"),
-                    ]
-                    if from_address and to_address and amount
-                    else []
-                ),
+                "standard": "ERC1155",
+                "operator": params.get("operator") or params.get("param0"),
+                "from": params.get("from") or params.get("param1"),
+                "to": params.get("to") or params.get("param2"),
+                "token_id": params.get("id") or params.get("param3"),
+                "raw_amount": params.get("value") or params.get("amount") or params.get("param4"),
+            }
+        )
+    elif name == "TransferBatch":
+        event.update(
+            {
+                "standard": "ERC1155",
+                "operator": params.get("operator") or params.get("param0"),
+                "from": params.get("from") or params.get("param1"),
+                "to": params.get("to") or params.get("param2"),
+                "token_ids": params.get("ids") or params.get("param3"),
+                "raw_amounts": params.get("values") or params.get("amounts") or params.get("param4"),
             }
         )
     elif name == "Approval":
@@ -394,6 +428,12 @@ def parse_trace(text: str) -> dict[str, Any]:
         for event in events
         for change in event.get("balance_changes", [])
     ]
+    non_fungible_transfers = [
+        event
+        for event in events
+        if event.get("standard") in ("ERC721", "ERC1155")
+        and event.get("event") in ("Transfer", "TransferSingle", "TransferBatch")
+    ]
 
     return {
         "transfers": transfer_from_calls,
@@ -402,6 +442,8 @@ def parse_trace(text: str) -> dict[str, Any]:
         "approvals": approvals,
         "events": events,
         "event_balance_changes": event_balance_changes,
+        "non_fungible_transfers": non_fungible_transfers,
+        "non_fungible_transfer_count": len(non_fungible_transfers),
         "allowance_checks": allowance_checks,
         "transfer_count": len(transfer_from_calls),
         "transfer_from_call_count": len(transfer_from_calls),
@@ -448,7 +490,7 @@ def parse_file(path: Path) -> dict[str, Any]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Extract token calls, events, balance deltas, and allowance rows from PCL trace JSON/text."
+        description="Extract token calls, asset events, balance deltas, and allowance rows from PCL trace JSON/text."
     )
     parser.add_argument("files", nargs="+", help="PCL trace JSON/text files")
     parser.add_argument("--pretty", action="store_true", help="Pretty-print JSON")

@@ -35,9 +35,15 @@ CHAIN_RPC_ENV = {
     "1": "ETH_RPC_URL",
     "10": "OPTIMISM_RPC_URL",
     "137": "POLYGON_RPC_URL",
+    "324": "ZKSYNC_RPC_URL",
+    "43114": "AVALANCHE_RPC_URL",
     "42161": "ARBITRUM_RPC_URL",
     "8453": "BASE_RPC_URL",
+    "100": "GNOSIS_RPC_URL",
+    "5000": "MANTLE_RPC_URL",
+    "534352": "SCROLL_RPC_URL",
     "59144": "LINEA_RPC_URL",
+    "81457": "BLAST_RPC_URL",
 }
 
 
@@ -137,10 +143,31 @@ def sourcify_verified(status: int | None, data: Any) -> bool:
     return any(key in data for key in ("stdJsonInput", "metadata", "sources", "abi"))
 
 
+def unique(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    result = []
+    for value in values:
+        if value in seen:
+            continue
+        seen.add(value)
+        result.append(value)
+    return result
+
+
+def chain_rpc_env_names(chain_id: str) -> list[str]:
+    names = [
+        CHAIN_RPC_ENV.get(chain_id),
+        f"CHAIN_{chain_id}_RPC_URL",
+        f"RPC_URL_{chain_id}",
+        f"EVM_{chain_id}_RPC_URL",
+    ]
+    return unique([name for name in names if name])
+
+
 def derived_rpc_url(chain_id: str) -> str | None:
-    chain_env = CHAIN_RPC_ENV.get(chain_id)
-    if chain_env and os.getenv(chain_env):
-        return os.getenv(chain_env)
+    for chain_env in chain_rpc_env_names(chain_id):
+        if os.getenv(chain_env):
+            return os.getenv(chain_env)
     if os.getenv("RPC_URL"):
         return os.getenv("RPC_URL")
     alchemy_key = os.getenv("ALCHEMY_API_KEY")
@@ -153,12 +180,17 @@ def derived_rpc_url(chain_id: str) -> str | None:
 
 
 def rpc_requirement_message(chain_id: str) -> str:
-    chain_env = CHAIN_RPC_ENV.get(chain_id) or "<CHAIN>_RPC_URL"
     alchemy_note = (
         "ALCHEMY_API_KEY can derive an RPC URL for this chain"
         if chain_id in ALCHEMY_HOSTS
         else "ALCHEMY_API_KEY cannot derive an RPC URL for this unsupported chain id"
     )
+    configure_options = [
+        "--rpc-url <url>",
+        *chain_rpc_env_names(chain_id),
+        "RPC_URL",
+        alchemy_note,
+    ]
     return "\n".join(
         [
             "Missing required JSON-RPC access for PCL invalidation triage.",
@@ -168,10 +200,7 @@ def rpc_requirement_message(chain_id: str) -> str:
             "- runtime bytecode capture for decompiler targets",
             "- source/decompiler coverage checks before RCA",
             "configure one of:",
-            "- --rpc-url <url>",
-            f"- {chain_env}",
-            "- RPC_URL",
-            f"- {alchemy_note}",
+            *[f"- {option}" for option in configure_options],
             (
                 "Run scripts/check_triage_requirements.py --chain-id "
                 f"{chain_id} to see the full local requirements report."
@@ -206,7 +235,13 @@ def main() -> int:
     parser.add_argument("--chain-id", required=True, help="EVM chain id, e.g. 59144")
     parser.add_argument("--out-dir", required=True, help="Output directory for source artifacts")
     parser.add_argument("--rpc-url", default=None)
-    parser.add_argument("--etherscan-api-key", default=os.getenv("ETHERSCAN_API_KEY"))
+    parser.add_argument(
+        "--etherscan-api-key",
+        "--explorer-api-key",
+        dest="etherscan_api_key",
+        default=os.getenv("ETHERSCAN_API_KEY") or os.getenv("EXPLORER_API_KEY"),
+        help="Etherscan V2-compatible source API key. Secrets are not printed.",
+    )
     parser.add_argument("--skip-sourcify", action="store_true")
     parser.add_argument(
         "--allow-missing-rpc",
