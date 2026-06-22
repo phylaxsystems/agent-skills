@@ -84,6 +84,7 @@
         "SKILL.md",
         "agents/openai.yaml",
         "references/etl-pipeline.md",
+        "scripts/build_evidence_packet.py",
         "scripts/check_triage_requirements.py",
         "scripts/collect_contract_context.py",
         "scripts/normalize_pcl_trace.py",

@@ -53,7 +53,8 @@ When the user asks for production-style agentic triage, optimize for the same us
 
 For one to five invalidating transactions:
 
-- Fetch detail, trace, contract context, previous transaction, asset/protocol metadata, and block-pinned state reads, then write the full report.
+- Fetch detail, trace, contract context, previous transaction, asset/protocol metadata, and block-pinned state reads once, then build a compact evidence packet before writing the full report.
+- If a report agent or spawned agent will write the final output, hand it the compact packet first. Do not ask it to rediscover PCL list/detail/trace data unless the packet is missing or internally inconsistent.
 
 For larger incident windows:
 
@@ -64,9 +65,10 @@ For larger incident windows:
 
 If a multi-agent runner is available and the user asks for a deep pass, split the work into three artifact-sharing phases:
 
-- **RCA phase**: PCL context, source/decompiler context, previous txs, and trace evidence.
+- **Prefetch/RCA phase**: PCL context, normalized trace, source/decompiler context, previous txs, and trace-backed mechanism.
 - **Replay phase**: RPC/cast checks for calldata, selectors, receipts/logs, balances, allowances, owners, protocol storage, and replayability.
-- **Report phase**: final invalidation-detail artifact using only the evidence packet and explicit gaps.
+- **Packet phase**: run `scripts/build_evidence_packet.py` over the saved artifacts and append any replay/state-read outputs as auxiliary files.
+- **Report phase**: final invalidation-detail artifact using the compact evidence packet first, raw artifacts only for verification, and explicit gaps.
 
 If no runner is available, execute the same phases sequentially. Do not let the report phase invent missing source, replay, or previous-transaction evidence.
 
@@ -105,6 +107,8 @@ If no runner is available, execute the same phases sequentially. Do not let the 
    - Treat contract source context as a required stage before root-cause analysis. Extract every address from transaction traces, assertion traces, transaction objects, created-contract lines, token proxy/implementation delegatecalls, and assertion/runtime helper calls.
    - Run `scripts/collect_contract_context.py --chain-id <chain-id> --out-dir contract_context trace_*.json` after traces are saved. Provide `--rpc-url` explicitly or rely on current env. It fetches bytecode, Etherscan V2 source, Sourcify source, and emits `contract_context_manifest.json` with unverified decompiler targets.
    - When `contract_context_manifest.json` has bytecode-backed `decompiler_targets`, run `scripts/run_heimdall_decompiler.py contract_context/contract_context_manifest.json --out-dir decompiled --require-success`. Heimdall-rs is the only supported decompiler path for this skill. Install `heimdall` on PATH or set `HEIMDALL_BIN=/absolute/path/to/heimdall`.
+   - After normalization, contract context, decompilation, and targeted replay/state reads, run `scripts/build_evidence_packet.py --run-dir <run-dir> --incident-json <incident.json> --trace-json <trace.json> --normalized-json <normalized.json> --contract-context <manifest.json> --decompilation-manifest <heimdall_manifest.json> --out evidence_packet.md`. Use the packet as the report agent's primary input.
+   - If an evidence packet is already provided, read it first and treat listed artifacts as prefetched. Do not rerun `pcl search`, incident list/detail, trace fetch, source collection, or decompilation unless a listed artifact is missing, stale, or inconsistent with the request.
    - The contract-context helper exits with the exact missing JSON-RPC requirement when no RPC is configured. Use `--allow-missing-rpc` only when explicitly accepting a degraded source-only packet, then list that as a confidence gap.
    - For contracts created inside a non-landed PCL simulation, `eth_getCode(latest)` may return no code. Treat these as transient created-contract gaps, then recover init/runtime bytecode from trace output, calldata, replay, or decompiler tooling before relying on that route for RCA.
    - For every code-bearing address, attach one of: verified source/ABI, Sourcify contract data, decompiled output, or a specific unresolved-source gap. Do not do root-cause analysis from labels alone when source/decompiled context is missing for an important touched contract.
@@ -259,5 +263,6 @@ Use this order:
    - Full improved trace: one ordered trace that combines the transaction execution and assertion evaluation. Include formatted contract names, decoded asset/protocol events, human-readable amounts or ids, delegatecall notes, adopter reads, logs/call inputs inspected, state checks, and the final revert reason.
    - Value and exposure: actual loss, unique protected value, repeated blocked attempt volume, unverified estimates, remaining balances/allowances/ownership/state exposure.
    - Open gaps and confidence: failed/pending traces, missing source/ABI, unpriced assets, and what would improve confidence.
+   - Runtime and usage: report wall-clock time. If token usage is unavailable, report compact packet size, key artifact bytes loaded or referenced, and output size instead of guessing.
 
 Avoid generic security advice unless the user asks. Prioritize the concrete mechanism, value, what happened, why it was stopped, and exactly what to check or revoke now.

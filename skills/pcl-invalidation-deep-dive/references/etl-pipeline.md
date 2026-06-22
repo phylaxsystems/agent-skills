@@ -132,13 +132,34 @@ ownership_operator_state.json
 protocol_state_reads.json
 ```
 
+After the raw artifacts and targeted state reads exist, build a compact report-agent packet:
+
+```bash
+scripts/build_evidence_packet.py \
+  --run-dir <run-dir> \
+  --project <project-slug> \
+  --project-id <project-id> \
+  --chain-id <chain-id> \
+  --incident-id <incident-id> \
+  --pcl-tx-id <pcl-tx-id> \
+  --incident-json incident.json \
+  --trace-json trace_<incident-id>_<pcl-tx-id>.json \
+  --normalized-json normalized_traces.json \
+  --contract-context contract_context/contract_context_manifest.json \
+  --decompilation-manifest decompiled/heimdall_decompilation_manifest.json \
+  --out evidence_packet.md
+```
+
+Use `evidence_packet.md` as the primary input for report writing or spawned report agents. The report agent should open raw JSON only to verify exact call order, quote exact trace lines, or resolve explicit gaps. Do not refetch PCL list/detail/trace data when the packet already lists consistent artifacts.
+
 ## Stage 2A: Fast Batching and Split-Agent Pipeline
 
 The local skill should preserve production feature parity without loading every raw artifact into the model.
 
 For one to five invalidating txs:
 
-- Run the full packet for each tx before report writing.
+- Run the full prefetch and packet-builder path for each tx before report writing.
+- Hand spawned report agents only the compact packet plus necessary artifact paths, not the entire conversation or every raw trace.
 - Include every improved trace unless they are near-identical retries.
 
 For larger windows:
@@ -159,7 +180,8 @@ When a multi-agent runner is available and the user asks for a deep pass, split 
 
 - **Root-cause agent**: receives PCL detail/traces, source/decompiler manifest, previous txs, and normalized movements; returns mechanism, actors, confidence, and gaps.
 - **Replay agent**: receives tx objects and RPC config; runs `cast`/RPC checks for tx, receipt/logs, calldata, balances, allowances, and replayability; returns commands, outputs, and failures.
-- **Report agent**: receives only the evidence packet, the two phase outputs, and explicit gaps; writes the production invalidation-detail artifact.
+- **Packet builder**: writes `evidence_packet.md` from saved artifacts and appends links to replay/state-read outputs.
+- **Report agent**: receives only the compact evidence packet, selected raw artifact paths, and explicit gaps; writes the production invalidation-detail artifact.
 
 If no runner is available, run the phases sequentially. Keep the same handoff boundary so the final report does not invent evidence the RCA or replay phase did not produce.
 
@@ -173,7 +195,7 @@ For each transaction trace:
 - Prefer running `scripts/normalize_pcl_trace.py --pretty trace_*.json > normalized_traces.json` before manual reasoning. It extracts non-delegatecall token calls, ERC20/ERC721/ERC1155/WETH/ERC4626 events, event-level deltas, non-fungible movements, and allowance checks into JSON. Treat it as a parsing aid, not a replacement for raw trace inspection.
 - Count only non-delegatecall calls/events for direct attempted movement accounting.
 - Prefer emitted asset/protocol events and executed calls over raw calldata guesses.
-- Keep assertion trace separate from transaction trace.
+- Preserve raw assertion and transaction trace sections as artifacts, but combine them into one ordered `Full Improved Trace` in the final report.
 - Preserve revert reason.
 
 For asset-movement attempts, extract:
