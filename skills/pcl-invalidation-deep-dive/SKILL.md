@@ -1,6 +1,6 @@
 ---
 name: pcl-invalidation-deep-dive
-description: Run local agentic triage for Phylax PCL/Credible Layer invalidations, protected-loss events, blocked transactions, failed or pending debug traces, and "we got hacked" requests by using the pcl CLI plus keyless/public or keyed JSON-RPC, cast, Sourcify/4byte/explorer source lookups, and local decompiler evidence. Use when a user reports a new invalidation, asks what a dropped transaction attempted, why an assertion invalidated it, whether it looks malicious or benign, what value or protocol state was protected, what risk remains, or what action to take next across any EVM protocol, chain, asset type, router, bridge, vault, lending market, token, or custom assertion.
+description: Run local agentic triage for Phylax PCL/Credible Layer invalidations, protected-loss events, blocked transactions, failed or pending debug traces, and "we got hacked" requests by using the pcl CLI plus keyless/public or keyed JSON-RPC, cast, Sourcify/4byte/explorer source lookups, and Heimdall-rs local decompiler/disassembler evidence. Use when a user reports a new invalidation, asks what a dropped transaction attempted, why an assertion invalidated it, whether it looks malicious or benign, what value or protocol state was protected, what risk remains, or what action to take next across any EVM protocol, chain, asset type, router, bridge, vault, lending market, token, or custom assertion.
 ---
 
 # PCL Invalidation Deep Dive
@@ -46,7 +46,7 @@ Always separate:
 
 This skill is the local version of the production "Agentic triage" flow: it should work from PCL invalidation records and local/API evidence, without requiring the dApp backend to precompute the report.
 
-Keyless mode means no third-party RPC, explorer, source, or decompiler API keys. Live incident discovery still needs `pcl` platform auth unless the user provides exported PCL incident/trace artifacts or a prebuilt evidence packet.
+Keyless mode means no third-party RPC, explorer, or source API keys. Code recovery is local-only through Heimdall-rs; if Heimdall is unavailable, list that as a source gap. Live incident discovery still needs `pcl` platform auth unless the user provides exported PCL incident/trace artifacts or a prebuilt evidence packet.
 
 Read [references/etl-pipeline.md](references/etl-pipeline.md) when you need the full local ETL checklist, data-source matrix, context packet, or value-accounting rules.
 
@@ -127,7 +127,7 @@ Use this mode whenever an `evidence_packet.md` or equivalent prefetched packet i
    - Treat contract source context as a required stage before root-cause analysis. Extract every address from transaction traces, assertion traces, transaction objects, created-contract lines, token proxy/implementation delegatecalls, and assertion/runtime helper calls.
    - Run `{baseDir}/scripts/collect_contract_context.py --chain-id <chain-id> --out-dir contract_context trace_*.json` after traces are saved when private-or-mixed mode is available. Provide `--rpc-url` explicitly or rely on current env/provider/public fallback. It fetches bytecode, Etherscan source when keyed, Sourcify source, and emits `contract_context_manifest.json` with unverified decompiler targets.
    - Run `{baseDir}/scripts/collect_contract_context.py --chain-id <chain-id> --no-api-keys --out-dir contract_context trace_*.json` for keyless-public mode or explicit no-key proof. It ignores provider/explorer keys and uses explicit/env/public RPC plus Sourcify.
-   - When `contract_context_manifest.json` has bytecode-backed `decompiler_targets`, run `{baseDir}/scripts/run_heimdall_decompiler.py contract_context/contract_context_manifest.json --out-dir decompiled --require-success`. Heimdall-rs is the only supported decompiler path for this skill. Install `heimdall` on PATH or set `HEIMDALL_BIN=/absolute/path/to/heimdall`.
+   - When `contract_context_manifest.json` has bytecode-backed `decompiler_targets`, run `{baseDir}/scripts/run_heimdall_decompiler.py contract_context/contract_context_manifest.json --out-dir decompiled --require-success`. Heimdall-rs is the single supported local decompiler/disassembler path for this skill. Install `heimdall` on PATH or set `HEIMDALL_BIN=/absolute/path/to/heimdall`.
    - After normalization, contract context, decompilation, and targeted replay/state reads, run `{baseDir}/scripts/build_evidence_packet.py --run-dir <run-dir> --incident-json <incident.json> --trace-json <trace.json> --normalized-json <normalized.json> --contract-context <manifest.json> --decompilation-manifest <heimdall_manifest.json> --aux-file "capability preflight=capability_preflight.json" --aux-file "state reads=state_reads.json" --aux-file "previous sender txs=previous_tx.json" --out evidence_packet.md`. Use the packet as the report agent's primary input.
    - For a fast single-trace report, run `{baseDir}/scripts/render_fast_report.py --packet evidence_packet.md --run-dir <run-dir> --out final_report.md` before any free-form writing. Review the draft for obvious errors and only then add concise human improvements.
    - If an evidence packet is already provided, read it first and treat listed artifacts as prefetched. Do not rerun `pcl search`, incident list/detail, trace fetch, source collection, or decompilation unless a listed artifact is missing, stale, or inconsistent with the request.
@@ -167,7 +167,7 @@ Use this mode whenever an `evidence_packet.md` or equivalent prefetched packet i
    - For suspicious sequences, run a bounded related-transaction lookback around previous blocks for the same sender, source owner/account, recipient/beneficiary, asset, spender/operator/adopter, and outer route. Keep the expansion bounded, save the query, and report if the analysis depends on it.
    - Use Sourcify first for no-key verified source/ABI. Use Etherscan v2 or chain explorers for verified source/ABI, asset transfers, contract labels, creation txs, and public links when keys are configured or keyless source is insufficient.
    - Use Sourcify as a no-key verified-source fallback with `/server/v2/contract/<chain-id>/<address>?fields=all`.
-   - For code-bearing addresses without verified source, use Heimdall-rs via `{baseDir}/scripts/run_heimdall_decompiler.py`. If Heimdall is unavailable, store runtime bytecode and list the address as a source/decompiler gap instead of switching to a different decompiler.
+   - For code-bearing addresses without verified source, use Heimdall-rs via `{baseDir}/scripts/run_heimdall_decompiler.py`. If Heimdall is unavailable, store runtime bytecode and list the address as a source/decompiler gap.
    - Label all decompiled output as approximate. Use it to understand control flow, selectors, storage, and call routing; do not treat it as verified source.
    - Decode unknown selectors with `cast 4byte <selector>`; if unresolved, include the selector in open gaps instead of inventing a function name.
    - If PCL says `landed_on_chain=false`, treat it as a blocked simulation/invalidation unless chain evidence proves otherwise.
@@ -241,7 +241,7 @@ Expect to need:
 - Chain RPC. Public RPC is acceptable for keyless basic reads when it works; archive/debug RPC is a high-confidence upgrade.
 - Sourcify for no-key verified contract lookup where supported.
 - 4byte/cast for no-key selector and event signature lookup.
-- Heimdall-rs for local unverified contract decompilation. Install `heimdall` on PATH or set `HEIMDALL_BIN=/absolute/path/to/heimdall`.
+- Heimdall-rs for local unverified contract decompilation/disassembly. Install `heimdall` on PATH or set `HEIMDALL_BIN=/absolute/path/to/heimdall`.
 - `cast` for selectors, calldata, storage, balances, and ad hoc ABI calls.
 - Asset metadata and prices from chain calls, DeFiLlama, CoinGecko, NFT/indexer APIs, or a verified token list.
 - Optional keyed upgrade: Etherscan v2 or chain-specific explorer API keys for faster tx history, source, ABI, labels, and logs.

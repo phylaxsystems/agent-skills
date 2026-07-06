@@ -20,6 +20,7 @@ test("pcl invalidation report contract uses one full improved trace", async () =
   assert.match(combined, /External API keys are mandatory/);
   assert.match(combined, /Sourcify/);
   assert.match(combined, /public RPC/);
+  assert.match(combined, /Heimdall-rs local decompiler\/disassembler/);
   assert.match(combined, /capability_selection/);
   assert.match(combined, /private-or-mixed/);
   assert.match(combined, /keyless-public/);
@@ -35,4 +36,7 @@ test("pcl invalidation report contract uses one full improved trace", async () =
   assert.doesNotMatch(combined, /Improved Assertion Trace/);
   assert.doesNotMatch(combined, /improved transaction trace/);
   assert.doesNotMatch(combined, /improved assertion trace/);
+  assert.doesNotMatch(combined, /Dedaub/i);
+  assert.doesNotMatch(combined, /decompiler API keys/i);
+  assert.doesNotMatch(combined, /substitute another decompiler/i);
 });

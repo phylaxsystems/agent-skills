@@ -7,9 +7,9 @@ The production agentic triage feature has two goals:
 - Make transaction and assertion traces understandable to humans.
 - Produce a triage report that explains what the dropped transaction attempted, why the assertion invalidated it, whether the transaction looks malicious, and what action the user should take.
 
-This skill implements that flow locally using `pcl`, keyless/public or keyed RPC, Sourcify/4byte/explorer source lookups, `cast`, and local artifacts.
+This skill implements that flow locally using `pcl`, keyless/public or keyed RPC, Sourcify/4byte/explorer source lookups, `cast`, Heimdall-rs local decompiler/disassembler output, and local artifacts.
 
-Keyless means no third-party RPC, explorer, source, or decompiler API keys. Live PCL incident discovery still requires PCL platform auth unless the operator starts from exported incident/trace artifacts or a prebuilt evidence packet.
+Keyless means no third-party RPC, explorer, or source API keys. Code recovery is local-only through Heimdall-rs; if Heimdall is unavailable, list that as a source gap. Live PCL incident discovery still requires PCL platform auth unless the operator starts from exported incident/trace artifacts or a prebuilt evidence packet.
 
 ## Stage 0: Intake
 
@@ -79,7 +79,7 @@ Use auto-discovery for normal triage. The JSON report includes `capability_selec
 - `mode=keyless-public`: no configured/private endpoints were found, but a public RPC works. Proceed without asking for keys and report archive/debug/account-history limitations.
 - `mode=blocked`: no working RPC was found. Stop unless the user accepts degraded source-only analysis.
 
-Use `--no-api-keys` only when the operator wants a no-key proof or when auto-discovery finds no private endpoints. Use `--require-decompiler` when unverified code, created/transient contracts, or source-dependent RCA makes decompiler access necessary. Use keyed explorer mode only when Sourcify/decompilation or public RPC leaves a material gap.
+Use `--no-api-keys` only when the operator wants a no-key proof or when auto-discovery finds no private endpoints. Use `--require-decompiler` when unverified code, created/transient contracts, or source-dependent RCA makes local Heimdall access necessary. Use keyed explorer mode only when Sourcify/decompilation or public RPC leaves a material gap.
 
 Before collecting source or replay context, show a short capability note:
 
@@ -121,7 +121,7 @@ Optional context:
 - Explorer labels.
 - Keyed account-history API data.
 - Tenderly/Phalcon visual trace.
-- Heimdall-rs decompiler output when verified source is unavailable.
+- Heimdall-rs local decompiler/disassembler output when verified source is unavailable.
 - Related txs before/after the invalidation from the same sender, recipient, or route.
 
 Context packet checklist:
@@ -345,7 +345,7 @@ Keyed upgrade when keyless source leaves a material gap:
   trace_*.json
 ```
 
-For bytecode-backed decompiler targets, run Heimdall-rs:
+For bytecode-backed decompiler targets, run the single supported local code-recovery path, Heimdall-rs:
 
 ```bash
 {baseDir}/scripts/run_heimdall_decompiler.py \
@@ -376,18 +376,18 @@ If a decompiler target has `bytecode_path: null` because the address was created
 
 Do not claim what a temporary contract did solely from its address or label.
 
-Source/decompiler fallback order:
+Source and local code-recovery order:
 
 1. Sourcify verified contract data.
 2. Verified source and ABI from Etherscan V2 or a chain-specific explorer when keys are configured.
 3. Known local labels/ABIs from the project or token metadata.
 4. Heimdall-rs for code-bearing addresses without verified source.
-5. If no decompiler is configured, store bytecode and list the address as an unresolved source/decompiler gap.
+5. If Heimdall is not configured, store bytecode and list the address as an unresolved source/decompiler gap.
 
 Heimdall notes:
 
-- Heimdall-rs is the only supported decompiler in this skill. That keeps the local triage path fast, deterministic, and easy to test.
-- If Heimdall is unavailable, do not substitute another decompiler in the skill run. Record the missing source/decompiler context as a gap and continue only if the user accepts degraded confidence.
+- Heimdall-rs is the single supported local decompiler/disassembler in this skill. That keeps the local triage path fast, deterministic, and easy to test.
+- If Heimdall is unavailable, record the missing source/decompiler context as a gap and continue only if the user accepts degraded confidence.
 - Label decompiled or AI-reconstructed code as approximate. Use it for control-flow, selector, storage, and routing hypotheses, then validate critical claims against trace/RPC evidence.
 
 RCA source-context rule:
