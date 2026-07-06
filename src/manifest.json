@@ -89,6 +89,7 @@
         "scripts/collect_contract_context.py",
         "scripts/normalize_pcl_trace.py",
         "scripts/render_fast_report.py",
+        "scripts/rpc_resolver.py",
         "scripts/run_heimdall_decompiler.py"
       ]
     },

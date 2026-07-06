@@ -70,7 +70,7 @@ If a multi-agent runner is available and the user asks for a deep pass, split th
 
 - **Prefetch/RCA phase**: PCL context, normalized trace, source/decompiler context, previous txs, and trace-backed mechanism.
 - **Replay phase**: RPC/cast checks for calldata, selectors, receipts/logs, balances, allowances, owners, protocol storage, and replayability.
-- **Packet phase**: run `scripts/build_evidence_packet.py` over the saved artifacts and append any replay/state-read outputs as auxiliary files.
+- **Packet phase**: run `{baseDir}/scripts/build_evidence_packet.py` over the saved artifacts and append any replay/state-read outputs as auxiliary files.
 - **Report phase**: final invalidation-detail artifact using the compact evidence packet first, raw artifacts only for verification, and explicit gaps.
 
 If no runner is available, execute the same phases sequentially. Do not let the report phase invent missing source, replay, or previous-transaction evidence.
@@ -79,7 +79,7 @@ If no runner is available, execute the same phases sequentially. Do not let the 
 
 Use this mode whenever an `evidence_packet.md` or equivalent prefetched packet is provided. This is the default for spawned report agents.
 
-- Prefer `scripts/render_fast_report.py --packet <evidence_packet.md> --run-dir <run-dir> --out <final_report.md>` to create the first report draft, then review/edit only if the deterministic draft misses an important packet fact.
+- Prefer `{baseDir}/scripts/render_fast_report.py --packet <evidence_packet.md> --run-dir <run-dir> --out <final_report.md>` to create the first report draft, then review/edit only if the deterministic draft misses an important packet fact.
 - Target under 90 seconds from packet read to saved report for one completed trace.
 - Read the evidence packet first, then only the listed auxiliary state/receipt/price/previous-transaction files.
 - Do not rerun PCL, source collection, decompilation, Homebrew formula checks, selector lookup, RPC, or explorer calls unless the packet has a blocking contradiction or the user explicitly asks for a deeper pass.
@@ -111,25 +111,25 @@ Use this mode whenever an `evidence_packet.md` or equivalent prefetched packet i
    - For each incident, pull detail with `pcl incidents --incident-id <id> --toon`.
    - For each invalidating transaction, pull trace with `pcl incidents --incident-id <id> --tx-id <pcl-transaction-id> --toon`, even when the list row says no traces completed. A failed trace still returns the transaction object, block env, calldata, and debug trace status.
    - For multi-incident work, save trace JSON artifacts with both ids in the filename, such as `trace_<incident-id>_<pcl-tx-id>.json`; trace-only responses may not repeat the incident id.
-   - After fetching traces, run `scripts/normalize_pcl_trace.py --pretty trace_*.json > normalized_traces.json` to extract non-delegatecall token calls, ERC20/ERC721/ERC1155/WETH/ERC4626 events, event-level deltas, and allowance checks. Use the normalized rows as a parsing aid, then spot-check against raw trace text before final accounting.
+   - After fetching traces, run `{baseDir}/scripts/normalize_pcl_trace.py --pretty trace_*.json > normalized_traces.json` to extract non-delegatecall token calls, ERC20/ERC721/ERC1155/WETH/ERC4626 events, event-level deltas, and allowance checks. Use the normalized rows as a parsing aid, then spot-check against raw trace text before final accounting.
    - Track `transaction_count`, completed/pending/failed trace counts from each transaction's `debug_traces[].status`, `landed_on_chain`, revert reason, and request ids from the response envelope or `pcl requests list --limit 20 --toon`.
    - Key rows by `(incident_id, invalidating_transaction.id)`. Do not dedupe incident coverage by transaction hash alone; repeated simulations can reuse a hash while differing by incident window, block number, PCL tx id, or trace status.
 
 4. **Assemble the local triage context**
-   - Start with automatic capability discovery: `scripts/check_triage_requirements.py --chain-id <chain-id> --json`. Add `--require-decompiler` when unverified code, transient contracts, or source gaps must be resolved for the answer.
+   - Start with automatic capability discovery: `{baseDir}/scripts/check_triage_requirements.py --chain-id <chain-id> --json`. Add `--require-decompiler` when unverified code, transient contracts, or source gaps must be resolved for the answer.
    - Read `capability_selection`. Before deeper context collection, tell the operator one concise capability note: recommended mode, whether configured/private RPC is available, whether keyed explorer access is available, whether public RPC is being used, and what gaps that creates.
    - If `capability_selection.mode` is `private-or-mixed`, use configured/private RPC and explorer sources first, with public/Sourcify/Heimdall fallback.
    - If it is `keyless-public`, proceed without waiting for keys, but label archive/debug/account-history limits.
-   - If the user explicitly wants a no-key proof, rerun with `scripts/check_triage_requirements.py --chain-id <chain-id> --no-api-keys`.
+   - If the user explicitly wants a no-key proof, rerun with `{baseDir}/scripts/check_triage_requirements.py --chain-id <chain-id> --no-api-keys`.
    - If the requirements preflight exits non-zero and the mode is `blocked`, stop and surface its output verbatim. Do not continue to a root-cause report until the missing RPC/decompiler capability is configured, unless the user explicitly accepts a degraded report.
    - Build a local evidence packet from PCL plus RPC/explorer data: transaction object, transaction execution trace, assertion execution trace, previous transaction from the sender, all touched contract addresses, created contracts, ABIs/source when available, asset/protocol metadata, receipts/logs, and relevant state reads.
    - Fetch the previous transaction from the same sender before the invalidation block/hash using explorer account history or an equivalent RPC/indexer source. Save it as `previous_tx_<sender>.json`; if unavailable, list it as a gap because it can distinguish benign user flow, preparatory approvals, and multi-block exploit setup.
    - Treat contract source context as a required stage before root-cause analysis. Extract every address from transaction traces, assertion traces, transaction objects, created-contract lines, token proxy/implementation delegatecalls, and assertion/runtime helper calls.
-   - Run `scripts/collect_contract_context.py --chain-id <chain-id> --out-dir contract_context trace_*.json` after traces are saved when private-or-mixed mode is available. Provide `--rpc-url` explicitly or rely on current env/provider/public fallback. It fetches bytecode, Etherscan source when keyed, Sourcify source, and emits `contract_context_manifest.json` with unverified decompiler targets.
-   - Run `scripts/collect_contract_context.py --chain-id <chain-id> --no-api-keys --out-dir contract_context trace_*.json` for keyless-public mode or explicit no-key proof. It ignores provider/explorer keys and uses explicit/env/public RPC plus Sourcify.
-   - When `contract_context_manifest.json` has bytecode-backed `decompiler_targets`, run `scripts/run_heimdall_decompiler.py contract_context/contract_context_manifest.json --out-dir decompiled --require-success`. Heimdall-rs is the only supported decompiler path for this skill. Install `heimdall` on PATH or set `HEIMDALL_BIN=/absolute/path/to/heimdall`.
-   - After normalization, contract context, decompilation, and targeted replay/state reads, run `scripts/build_evidence_packet.py --run-dir <run-dir> --incident-json <incident.json> --trace-json <trace.json> --normalized-json <normalized.json> --contract-context <manifest.json> --decompilation-manifest <heimdall_manifest.json> --aux-file "capability preflight=capability_preflight.json" --aux-file "state reads=state_reads.json" --aux-file "previous sender txs=previous_tx.json" --out evidence_packet.md`. Use the packet as the report agent's primary input.
-   - For a fast single-trace report, run `scripts/render_fast_report.py --packet evidence_packet.md --run-dir <run-dir> --out final_report.md` before any free-form writing. Review the draft for obvious errors and only then add concise human improvements.
+   - Run `{baseDir}/scripts/collect_contract_context.py --chain-id <chain-id> --out-dir contract_context trace_*.json` after traces are saved when private-or-mixed mode is available. Provide `--rpc-url` explicitly or rely on current env/provider/public fallback. It fetches bytecode, Etherscan source when keyed, Sourcify source, and emits `contract_context_manifest.json` with unverified decompiler targets.
+   - Run `{baseDir}/scripts/collect_contract_context.py --chain-id <chain-id> --no-api-keys --out-dir contract_context trace_*.json` for keyless-public mode or explicit no-key proof. It ignores provider/explorer keys and uses explicit/env/public RPC plus Sourcify.
+   - When `contract_context_manifest.json` has bytecode-backed `decompiler_targets`, run `{baseDir}/scripts/run_heimdall_decompiler.py contract_context/contract_context_manifest.json --out-dir decompiled --require-success`. Heimdall-rs is the only supported decompiler path for this skill. Install `heimdall` on PATH or set `HEIMDALL_BIN=/absolute/path/to/heimdall`.
+   - After normalization, contract context, decompilation, and targeted replay/state reads, run `{baseDir}/scripts/build_evidence_packet.py --run-dir <run-dir> --incident-json <incident.json> --trace-json <trace.json> --normalized-json <normalized.json> --contract-context <manifest.json> --decompilation-manifest <heimdall_manifest.json> --aux-file "capability preflight=capability_preflight.json" --aux-file "state reads=state_reads.json" --aux-file "previous sender txs=previous_tx.json" --out evidence_packet.md`. Use the packet as the report agent's primary input.
+   - For a fast single-trace report, run `{baseDir}/scripts/render_fast_report.py --packet evidence_packet.md --run-dir <run-dir> --out final_report.md` before any free-form writing. Review the draft for obvious errors and only then add concise human improvements.
    - If an evidence packet is already provided, read it first and treat listed artifacts as prefetched. Do not rerun `pcl search`, incident list/detail, trace fetch, source collection, or decompilation unless a listed artifact is missing, stale, or inconsistent with the request.
    - The contract-context helper tries explicit/env RPC, derived provider RPC when allowed, and configured public RPC fallbacks. It exits with the exact missing JSON-RPC requirement when none works. Use `--allow-missing-rpc` only when explicitly accepting a degraded source-only packet, then list that as a confidence gap.
    - For contracts created inside a non-landed PCL simulation, `eth_getCode(latest)` may return no code. Treat these as transient created-contract gaps, then recover init/runtime bytecode from trace output, calldata, replay, or decompiler tooling before relying on that route for RCA.
@@ -167,7 +167,7 @@ Use this mode whenever an `evidence_packet.md` or equivalent prefetched packet i
    - For suspicious sequences, run a bounded related-transaction lookback around previous blocks for the same sender, source owner/account, recipient/beneficiary, asset, spender/operator/adopter, and outer route. Keep the expansion bounded, save the query, and report if the analysis depends on it.
    - Use Sourcify first for no-key verified source/ABI. Use Etherscan v2 or chain explorers for verified source/ABI, asset transfers, contract labels, creation txs, and public links when keys are configured or keyless source is insufficient.
    - Use Sourcify as a no-key verified-source fallback with `/server/v2/contract/<chain-id>/<address>?fields=all`.
-   - For code-bearing addresses without verified source, use Heimdall-rs via `scripts/run_heimdall_decompiler.py`. If Heimdall is unavailable, store runtime bytecode and list the address as a source/decompiler gap instead of switching to a different decompiler.
+   - For code-bearing addresses without verified source, use Heimdall-rs via `{baseDir}/scripts/run_heimdall_decompiler.py`. If Heimdall is unavailable, store runtime bytecode and list the address as a source/decompiler gap instead of switching to a different decompiler.
    - Label all decompiled output as approximate. Use it to understand control flow, selectors, storage, and call routing; do not treat it as verified source.
    - Decode unknown selectors with `cast 4byte <selector>`; if unresolved, include the selector in open gaps instead of inventing a function name.
    - If PCL says `landed_on_chain=false`, treat it as a blocked simulation/invalidation unless chain evidence proves otherwise.
@@ -258,10 +258,10 @@ Minimum useful environment:
 Before RCA, run the requirement gate. Use auto-discovery by default; use keyless mode when private endpoints are absent or the user explicitly asks for no keys:
 
 ```bash
-scripts/check_triage_requirements.py --chain-id <chain-id> --json
-scripts/check_triage_requirements.py --chain-id <chain-id> --no-api-keys
-scripts/check_triage_requirements.py --chain-id <chain-id> --no-api-keys --require-decompiler
-scripts/check_triage_requirements.py --chain-id <chain-id> --require-explorer
+{baseDir}/scripts/check_triage_requirements.py --chain-id <chain-id> --json
+{baseDir}/scripts/check_triage_requirements.py --chain-id <chain-id> --no-api-keys
+{baseDir}/scripts/check_triage_requirements.py --chain-id <chain-id> --no-api-keys --require-decompiler
+{baseDir}/scripts/check_triage_requirements.py --chain-id <chain-id> --require-explorer
 ```
 
 The gate reports which capability is missing, why it is required, which env var, local tool, public RPC fallback, or flag can satisfy it, and `capability_selection.mode`. Surface a concise capability note before proceeding instead of silently choosing keyed or keyless data sources.

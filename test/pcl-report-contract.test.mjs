@@ -24,6 +24,12 @@ test("pcl invalidation report contract uses one full improved trace", async () =
   assert.match(combined, /private-or-mixed/);
   assert.match(combined, /keyless-public/);
   assert.match(combined, /Data access mode/);
+  assert.match(combined, /\{baseDir\}\/scripts\/check_triage_requirements\.py/);
+
+  const bareScriptReferences = combined
+    .split("\n")
+    .filter((line) => line.includes("scripts/") && !line.includes("{baseDir}/scripts/"));
+  assert.deepEqual(bareScriptReferences, []);
 
   assert.doesNotMatch(combined, /Improved Transaction Trace/);
   assert.doesNotMatch(combined, /Improved Assertion Trace/);

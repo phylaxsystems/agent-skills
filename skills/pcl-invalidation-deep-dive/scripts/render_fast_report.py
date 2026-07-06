@@ -29,6 +29,14 @@ ALLOWANCE_RE = re.compile(
     r"token `(?P<token>0x[a-fA-F0-9]{40})`, owner `(?P<owner>0x[a-fA-F0-9]{40})`, "
     r"spender `(?P<spender>0x[a-fA-F0-9]{40})`, returned `(?P<returned>[^`]+)`"
 )
+CHAIN_NAMES = {
+    "1": "Ethereum mainnet",
+    "10": "Optimism",
+    "137": "Polygon",
+    "42161": "Arbitrum One",
+    "8453": "Base",
+    "59144": "Linea mainnet",
+}
 
 
 def read_json(path: Path | None) -> Any:
@@ -64,12 +72,23 @@ def first_address(text: str | None) -> str | None:
     return match.group(0) if match else None
 
 
+def parse_raw_int(raw: str | int | None) -> int | None:
+    if raw is None:
+        return None
+    parts = str(raw).split()
+    if not parts:
+        return None
+    try:
+        return int(parts[0])
+    except ValueError:
+        return None
+
+
 def human_amount(raw: str | int | None, decimals: int = 6) -> str:
     if raw is None:
         return "unknown"
-    try:
-        value = int(str(raw).split()[0])
-    except ValueError:
+    value = parse_raw_int(raw)
+    if value is None:
         return str(raw)
     return f"{value / (10 ** decimals):,.6f}"
 
@@ -190,18 +209,40 @@ def read_prefetched(packet_data: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def decimals_for(state: dict[str, Any] | None, token: str | None) -> int:
+def token_meta_for(state: dict[str, Any] | None, token: str | None) -> dict[str, Any]:
     if not state or not token:
+        return {}
+    tokens = state.get("tokens")
+    if not isinstance(tokens, dict):
+        return {}
+    direct = tokens.get(token)
+    if isinstance(direct, dict):
+        return direct
+    token_lower = token.lower()
+    for key, value in tokens.items():
+        if isinstance(key, str) and key.lower() == token_lower and isinstance(value, dict):
+            return value
+    return {}
+
+
+def decimals_for(state: dict[str, Any] | None, token: str | None) -> int:
+    token_meta = token_meta_for(state, token)
+    decimals = token_meta.get("decimals", 6)
+    try:
+        return int(decimals)
+    except (TypeError, ValueError):
         return 6
-    token_meta = (state.get("tokens") or {}).get(token) or {}
-    return int(token_meta.get("decimals") or 6)
 
 
 def symbol_for(state: dict[str, Any] | None, token: str | None) -> str:
-    if not state or not token:
-        return "token"
-    token_meta = (state.get("tokens") or {}).get(token) or {}
+    if not token:
+        return "asset"
+    token_meta = token_meta_for(state, token)
     return token_meta.get("symbol") or "token"
+
+
+def amount_label(raw: str | int | None, state: dict[str, Any] | None, token: str | None) -> str:
+    return f"{human_amount(raw, decimals_for(state, token))} {symbol_for(state, token)}"
 
 
 def state_reads(state: dict[str, Any] | None) -> list[dict[str, Any]]:
@@ -249,15 +290,17 @@ def capability_note(preflight: Any) -> str:
 
 def decompiler_note(source_lines: list[str], preflight: Any) -> str:
     joined = "\n".join(source_lines).lower()
-    selection = preflight.get("capability_selection") if isinstance(preflight, dict) else {}
-    decompiler_available = bool(isinstance(selection, dict) and selection.get("local_decompiler_available"))
-    if "0 completed" in joined or (not decompiler_available and "decompiled_needed" in joined):
+    completed_match = re.search(r"\b(\d+)\s+completed\b", joined)
+    completed_count = int(completed_match.group(1)) if completed_match else 0
+    needed_match = re.search(r"-\s*decompiled_needed:\s*`(\d+)`", joined)
+    needed_count = int(needed_match.group(1)) if needed_match else 0
+    if needed_count > completed_count:
         return (
             "Decompiler output is unavailable for at least one important code-bearing contract. "
             "Do not treat transient/router implementation behavior as source-confirmed; the value "
             "conclusion here comes from executed trace calls and events."
         )
-    if "completed" in joined:
+    if completed_count > 0:
         return (
             "Decompiler output is approximate. It is useful for route shape and source-gap tracking; "
             "the value conclusion comes from executed trace calls and events."
@@ -273,6 +316,79 @@ def unique_attempted(transfers: list[dict[str, str]]) -> dict[tuple[str, str], i
     return totals
 
 
+def token_totals(transfers: list[dict[str, str]], unique: bool) -> dict[str, int]:
+    if unique:
+        by_owner = unique_attempted(transfers)
+        totals: dict[str, int] = {}
+        for (token, _owner), raw in by_owner.items():
+            totals[token] = totals.get(token, 0) + raw
+        return totals
+    totals = {}
+    for transfer in transfers:
+        token = transfer["token"].lower()
+        raw = parse_raw_int(transfer.get("raw")) or 0
+        totals[token] = totals.get(token, 0) + raw
+    return totals
+
+
+def render_token_totals(totals: dict[str, int], state: dict[str, Any] | None) -> str:
+    if not totals:
+        return "unknown"
+    return "; ".join(amount_label(raw, state, token) for token, raw in sorted(totals.items()))
+
+
+def chain_label(chain_id: str) -> str:
+    name = CHAIN_NAMES.get(str(chain_id))
+    return f"{name} / {chain_id}" if name else f"chain_id={chain_id}"
+
+
+def split_adopter(adopter: str) -> tuple[str, str]:
+    address = first_address(adopter) or "unknown"
+    name = adopter
+    if " at `" in adopter:
+        name = adopter.split(" at `", 1)[0].strip() or "adopter"
+    elif address != "unknown":
+        name = adopter.replace(address, "").replace("`", "").strip(" at") or "adopter"
+    return name or "adopter", address
+
+
+def mechanism_label(transfers: list[dict[str, str]], allowances: list[dict[str, str]]) -> str:
+    if transfers and allowances:
+        return "allowance-sensitive transferFrom route"
+    if transfers:
+        return "transferFrom-based value movement"
+    if allowances:
+        return "allowance-sensitive assertion path"
+    return "assertion-defined invariant violation"
+
+
+def recommended_action(
+    transfers: list[dict[str, str]],
+    allowances: list[dict[str, str]],
+    assertion_name: str,
+    adopter_name: str,
+) -> str:
+    if allowances:
+        return (
+            f"Review and revoke or reduce any non-zero approvals to `{adopter_name}` for the affected "
+            "owners/tokens below, then retry the route only if the approval is intentional."
+        )
+    if transfers:
+        return "Inspect the affected owners/tokens below and confirm whether the simulated value movement was expected."
+    return f"Inspect the `{assertion_name}` inputs and source-specific state before taking irreversible action."
+
+
+def token_for_read(read: dict[str, Any], transfers: list[dict[str, str]]) -> str | None:
+    explicit = read.get("token") or read.get("asset")
+    if explicit:
+        return str(explicit)
+    owner = str(read.get("source_owner", "")).lower()
+    for transfer in transfers:
+        if transfer.get("src", "").lower() == owner:
+            return transfer.get("token")
+    return transfers[0].get("token") if len(transfers) == 1 else None
+
+
 def render_report(packet_data: dict[str, Any], prefetched: dict[str, Any], packet_path: Path, out_path: Path) -> str:
     scope = packet_data["scope"]
     transfers = packet_data["transfers"]
@@ -282,24 +398,29 @@ def render_report(packet_data: dict[str, Any], prefetched: dict[str, Any], packe
     preflight = prefetched.get("preflight")
     tx = prefetched["tx"]
     record = prefetched["record"]
-    decimals = decimals_for(state, transfers[0]["token"] if transfers else None)
-    symbol = symbol_for(state, transfers[0]["token"] if transfers else None)
-    unique_raw = sum(unique_attempted(transfers).values())
-    repeated_raw = sum(int(transfer["raw"]) for transfer in transfers)
+    unique_totals = token_totals(transfers, unique=True)
+    repeated_totals = token_totals(transfers, unique=False)
     final_event = events[-1] if events else None
-    actual_loss = "0" if str(scope.get("Landed on chain")).lower() == "false" else "unknown"
+    landed = str(scope.get("Landed on chain")).lower()
+    actual_loss = "0 (blocked/not landed)" if landed == "false" else "unknown; verify receipt/logs"
     revert_reason = packet_data["revert_decoded"] or "unknown"
     sender = tx.get("from_address") or record.get("from_address") or "unknown"
     target = tx.get("to_address") or record.get("to_address") or "unknown"
     hash_value = scope.get("Tx hash") or tx.get("transaction_hash") or record.get("transaction_hash") or "unknown"
-    adopter = scope.get("Adopter", "unknown")
-    adopter_address = first_address(adopter) or adopter
+    adopter = scope.get("Adopter", "unknown adopter")
+    adopter_name, adopter_address = split_adopter(adopter)
+    assertion_name = scope.get("Assertion", "unknown assertion")
+    project_name = scope.get("Project", "unknown project")
     incident_id = scope.get("Incident id", "unknown")
     pcl_tx_id = scope.get("PCL tx id", "unknown")
     chain_id = scope.get("Chain id", "unknown")
     block = tx.get("block_number") or record.get("block_number") or "unknown"
     tx_present = state.get("transaction") is not None if state else False
     receipt_present = state.get("receipt") is not None if state else False
+    mechanism = mechanism_label(transfers, allowances)
+    action = recommended_action(transfers, allowances, assertion_name, adopter_name)
+    source_owner_count = len({transfer["src"].lower() for transfer in transfers})
+    token_count = len({transfer["token"].lower() for transfer in transfers})
 
     movement_rows = []
     for transfer in transfers:
@@ -309,43 +430,59 @@ def render_report(packet_data: dict[str, Any], prefetched: dict[str, Any], packe
                 short(transfer["src"]),
                 short(transfer["dst"]),
                 transfer["raw"],
-                human_amount(transfer["raw"], decimals),
-                symbol,
+                human_amount(transfer["raw"], decimals_for(state, transfer["token"])),
+                symbol_for(state, transfer["token"]),
             )
         )
+    if not movement_rows:
+        movement_rows.append("| not decoded | unknown | unknown | unknown | unknown |")
 
     exposure_rows = []
     for read in state_reads(state):
+        token = token_for_read(read, transfers)
+        latest_allowance = read.get("allowance_latest", "not prefetched")
+        allowance_label = (
+            "max"
+            if str(latest_allowance).startswith("115792089")
+            else amount_label(latest_allowance, state, token)
+            if parse_raw_int(latest_allowance) is not None
+            else str(latest_allowance)
+        )
         exposure_rows.append(
             "| `{}` | `{}` {} | `{}` {} | `{}` |".format(
                 short(read.get("source_owner")),
-                human_amount(read.get("balance_at_block"), decimals),
-                symbol,
-                human_amount(read.get("balance_latest"), decimals),
-                symbol,
-                "max" if str(read.get("allowance_latest", "")).startswith("115792089") else read.get("allowance_latest", "not prefetched"),
+                human_amount(read.get("balance_at_block"), decimals_for(state, token)),
+                symbol_for(state, token),
+                human_amount(read.get("balance_latest"), decimals_for(state, token)),
+                symbol_for(state, token),
+                allowance_label,
             )
         )
 
     trace_steps = []
     trace_steps.append(f"1. `{short(sender)}` calls `{short(target)}` with the invalidating calldata; PCL simulates it at block `{block}`.")
-    trace_steps.append(f"2. The route reaches the 0x Settler adopter `{adopter}` and uses USDC `{short(transfers[0]['token']) if transfers else 'unknown'}`.")
+    trace_steps.append(f"2. The route reaches adopter `{adopter}` and touches `{token_count or 'unknown'}` asset contract(s).")
     step = 3
     for transfer in transfers:
         trace_steps.append(
-            f"{step}. Settler executes `transferFrom({short(transfer['src'])}, {short(transfer['dst'])}, "
-            f"{human_amount(transfer['raw'], decimals)} {symbol})`."
+            f"{step}. The route executes `transferFrom({short(transfer['src'])}, {short(transfer['dst'])}, "
+            f"{amount_label(transfer['raw'], state, transfer['token'])})` on `{short(transfer['token'])}`."
         )
         step += 1
     if final_event and transfers and final_event["src"].lower() == transfers[-1]["dst"].lower():
+        event_amount = (
+            amount_label(final_event.get("raw"), state, transfers[0]["token"])
+            if token_count == 1
+            else f"raw `{final_event.get('raw')}`"
+        )
         trace_steps.append(
-            f"{step}. The intermediate recipient transfers `{human_amount(final_event['raw'].split()[0], decimals)} {symbol}` "
+            f"{step}. The intermediate recipient transfers `{event_amount}` "
             f"to final recipient `{short(final_event['dst'])}`."
         )
         step += 1
     trace_steps.extend(
         [
-            f"{step}. The assertion reads the adopted contract and simulated logs/call inputs for the Settler execution.",
+            f"{step}. The assertion reads the adopted contract and simulated logs/call inputs.",
             f"{step + 1}. The assertion checks allowance for `{short(allowances[0]['owner']) if allowances else 'source owner'}` to `{short(allowances[0]['spender']) if allowances else 'adopter'}` and observes non-zero/max allowance.",
             f"{step + 2}. The assertion reverts with `{revert_reason}`, so the transaction does not land.",
         ]
@@ -365,17 +502,26 @@ def render_report(packet_data: dict[str, Any], prefetched: dict[str, Any], packe
     source_note = decompiler_note(packet_data["source_lines"], preflight)
     artifact_count = len(packet_data["artifacts"])
 
-    report = f"""# PCL Invalidation Triage Report: 0x-settler `{incident_id[:8]}`
+    repeated_text = render_token_totals(repeated_totals, state)
+    unique_text = render_token_totals(unique_totals, state)
+    verdict = (
+        f"Suspicious `{mechanism}`. The source owner(s) differ from the transaction sender, "
+        "and the trace shows attempted value movement through the adopter."
+        if transfers
+        else f"Inconclusive `{mechanism}`. No transferFrom movement was decoded from the packet, so preserve the assertion-specific gaps."
+    )
+
+    report = f"""# PCL Invalidation Triage Report: {project_name} `{incident_id[:8]}`
 
 ## Executive Summary
 
-**Transaction.** PCL blocked `{hash_value}` on Linea (`chain_id={chain_id}`) at block `{block}`. The transaction was from `{sender}` to `{target}` and is marked `landed_on_chain=false`; prefetched chain evidence shows RPC transaction object `{'present' if tx_present else 'absent'}` and receipt `{'present' if receipt_present else 'absent'}`. Treat it as blocked unless a receipt proves otherwise. The completed trace shows an attempted {symbol} drain through `{adopter}`.
+**Transaction.** PCL blocked `{hash_value}` on {chain_label(chain_id)} at block `{block}`. The transaction was from `{sender}` to `{target}` and is marked `landed_on_chain={scope.get('Landed on chain', 'unknown')}`; prefetched chain evidence shows RPC transaction object `{'present' if tx_present else 'absent'}` and receipt `{'present' if receipt_present else 'absent'}`. Treat it as blocked unless a receipt proves otherwise. The completed trace shows attempted movement of `{repeated_text}` through `{adopter}`.
 
-**Assertion.** `AllowanceAssertion` (`{scope.get('Assertion id', 'unknown')}`) invalidated with exact reason: `{revert_reason}`.
+**Assertion.** `{assertion_name}` (`{scope.get('Assertion id', 'unknown')}`) invalidated with exact reason: `{revert_reason}`.
 
-**Verdict.** Likely malicious allowance abuse. The source owners differ from the transaction sender, the trace shows `transferFrom` calls through the Settler adopter, and the funds are consolidated to a recipient controlled by the route.
+**Verdict.** {verdict}
 
-**Recommended next step.** Keep the assertion active. Revoke or reduce {symbol} approvals to `{adopter}` for the source owners below, starting with any owner whose latest allowance remains max/non-zero.
+**Recommended next step.** Keep the assertion active. {action}
 
 **Agent warning.** This triage was generated by an agent and can be wrong. Verify critical conclusions against the raw transaction, trace, and assertion evidence before taking irreversible action.
 
@@ -388,7 +534,7 @@ def render_report(packet_data: dict[str, Any], prefetched: dict[str, Any], packe
 | Incident id | `{incident_id}` |
 | PCL tx id | `{pcl_tx_id}` |
 | Window | `{scope.get('Window', 'unknown')}` |
-| Chain | `Linea / {chain_id}` |
+| Chain | `{chain_label(chain_id)}` |
 | Trace status | `{scope.get('Debug trace status', 'unknown')}` |
 | Evidence | `{packet_path}` plus `{artifact_count}` listed artifact files |
 | Live calls during render | `none` |
@@ -399,29 +545,29 @@ def render_report(packet_data: dict[str, Any], prefetched: dict[str, Any], packe
 
 ### Detailed Transaction Explanation
 
-The route attempted to move {human_amount(repeated_raw, decimals)} {symbol} from {len(transfers)} source owner(s). The final visible transfer event sends {human_amount(final_event['raw'].split()[0], decimals) + ' ' + symbol if final_event else 'the accumulated funds'} to `{short(final_event['dst']) if final_event else 'unknown'}`. Because the transaction did not land, these movements are simulated attempted effects, not realized loss.
+The route attempted to move `{repeated_text}` from {source_owner_count or 'unknown'} source owner(s). The final visible event target is `{short(final_event['dst']) if final_event else 'unknown'}`. Because the transaction did not land, these movements are simulated attempted effects, not realized loss.
 
 ```mermaid
 sequenceDiagram
   autonumber
   participant Sender as Sender/route<br/>{short(sender)}
-  participant Settler as LineaSettler<br/>{short(adopter_address)}
-  participant USDC as {symbol}<br/>{short(transfers[0]['token']) if transfers else 'unknown'}
+  participant Adopter as {adopter_name}<br/>{short(adopter_address)}
+  participant Asset as Asset(s)<br/>{token_count or 'unknown'}
   participant Owner1 as Source owner(s)
   participant Recipient as Recipient<br/>{short(final_event['dst']) if final_event else short(transfers[0]['dst']) if transfers else 'unknown'}
-  participant Assert as AllowanceAssertion
-  Sender->>Settler: execute encoded route
-  Settler->>USDC: transferFrom source owner(s)
-  USDC-->>Sender: simulated Transfer event(s)
-  Sender->>USDC: transfer consolidated funds
-  Assert->>USDC: allowance(source owner, LineaSettler)
-  USDC-->>Assert: non-zero/max allowance
+  participant Assert as {assertion_name}
+  Sender->>Adopter: execute invalidating route
+  Adopter->>Asset: transferFrom source owner(s)
+  Asset-->>Sender: simulated movement event(s)
+  Assert->>Adopter: inspect adopted-contract calls/logs
+  Assert->>Asset: allowance/source-state checks
+  Asset-->>Assert: decoded state/check result
   Assert--xSender: revert {revert_reason}
 ```
 
 ### Root Cause Analysis
 
-Mechanism: allowance abuse via the 0x Settler adopter. The critical evidence is the combination of `transferFrom` calls, simulated ERC20 `Transfer` events, and the assertion allowance read. {previous_summary}
+Mechanism: {mechanism}. The critical evidence is the combination of decoded movement rows, simulated asset events, and the assertion's state/call inspection. {previous_summary}
 
 ### Source And Decompiler Context
 
@@ -449,9 +595,9 @@ Mechanism: allowance abuse via the 0x Settler adopter. The critical evidence is 
 
 | Metric | Amount |
 |---|---:|
-| Actual landed loss | `{actual_loss} {symbol}` |
-| Unique protected value | `{human_amount(unique_raw, decimals)} {symbol}` |
-| Repeated blocked attempt volume | `{human_amount(repeated_raw, decimals)} {symbol}` |
+| Actual landed loss | `{actual_loss}` |
+| Unique protected value | `{unique_text}` |
+| Repeated blocked attempt volume | `{repeated_text}` |
 
 | Token | Source owner | Recipient | Raw amount | Human amount |
 |---|---|---|---:|---:|
@@ -463,7 +609,7 @@ Mechanism: allowance abuse via the 0x Settler adopter. The critical evidence is 
 
 ### Open Gaps And Confidence
 
-Confidence is high for the attempted {symbol} movement, blocked status, and assertion reason because the packet contains a completed trace, normalized movement rows, decoded events, and prefetched receipt/null checks. Remaining gaps: source-level intent for transient/decompiled-only contracts, any source owner whose latest allowance was not prefetched, and historical attribution beyond the bounded sender-history artifact.
+Confidence is highest for decoded movement rows, blocked status, and assertion reason when the packet contains a completed trace, normalized movements/events, and prefetched receipt/null checks. Remaining gaps: source-level intent for transient/decompiled-only contracts, any source owner whose latest allowance was not prefetched, and historical attribution beyond the bounded sender-history artifact.
 
 ### Runtime And Usage
 

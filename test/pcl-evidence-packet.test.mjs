@@ -214,7 +214,9 @@ test("build_evidence_packet writes compact report-agent packet", async () => {
   assert.match(packet, /Read listed auxiliary state, receipt, price, and previous-transaction files/);
   assert.match(packet, /Transfer from address with non-zero allowance to adopter/);
   assert.match(packet, /Incident invalidating tx count from detail: `2`/);
-  assert.match(packet, /1,071\.751815 token units/);
+  assert.match(packet, /raw `1071751815`/);
+  assert.doesNotMatch(packet, /assuming 6 decimals/);
+  assert.match(packet, /\{baseDir\}\/scripts\/render_fast_report\.py/);
   assert.match(packet, /created_contracts: `1`/);
 
   const renderScriptPath = path.join(
@@ -245,7 +247,172 @@ test("build_evidence_packet writes compact report-agent packet", async () => {
   assert.match(report, /Actual landed loss/);
   assert.match(report, /Unique protected value/);
   assert.match(report, /Transfer from address with non-zero allowance to adopter/);
-  const settlerLine = report.split("\n").find((line) => line.includes("participant Settler"));
-  assert.ok(settlerLine);
-  assert.doesNotMatch(settlerLine, /`0x/);
+  const adopterLine = report.split("\n").find((line) => line.includes("participant Adopter"));
+  assert.ok(adopterLine);
+  assert.doesNotMatch(adopterLine, /`0x/);
+});
+
+test("render_fast_report is generic and accounts per token", async () => {
+  const tempDir = await mkdtemp(path.join(tmpdir(), "pcl-generic-report-"));
+  const incidentPath = path.join(tempDir, "incident.json");
+  const tracePath = path.join(tempDir, "trace.json");
+  const normalizedPath = path.join(tempDir, "normalized.json");
+  const contextPath = path.join(tempDir, "contract_context_manifest.json");
+  const decompilationPath = path.join(tempDir, "heimdall_decompilation_manifest.json");
+  const statePath = path.join(tempDir, "state_reads.json");
+  const outPath = path.join(tempDir, "evidence_packet.md");
+  const reportPath = path.join(tempDir, "final_report.md");
+
+  const zeroDecimalToken = `0x${"a".repeat(40)}`;
+  const dai = `0x${"b".repeat(40)}`;
+  const ownerOne = `0x${"c".repeat(40)}`;
+  const ownerTwo = `0x${"d".repeat(40)}`;
+  const recipient = `0x${"e".repeat(40)}`;
+  const adopter = `0x${"f".repeat(40)}`;
+  const target = `0x${"1".repeat(40)}`;
+  const txHash = `0x${"2".repeat(64)}`;
+
+  await writeFile(
+    incidentPath,
+    JSON.stringify({
+      data: {
+        incident_id: "incident-generic",
+        assertion_id: "assertion-vault",
+        chain_id: 8453,
+        window_start: "2026-07-01T00:00:00+00:00",
+        environment: "production",
+        assertion: { title: "VaultBalanceAssertion" },
+        assertion_adopter: { name: "VaultRouter", address: adopter },
+        invalidating_transactions: [
+          {
+            id: "tx-generic",
+            transaction_hash: txHash,
+            from_address: recipient,
+            to_address: target,
+            block_number: 456,
+            landed_on_chain: false,
+            revert_reason: "Vault invariant failed",
+          },
+        ],
+      },
+    }),
+  );
+  await writeFile(tracePath, JSON.stringify({ data: { invalidating_transaction: {} } }));
+  await writeFile(
+    normalizedPath,
+    JSON.stringify({
+      records: [
+        {
+          incident_id: "incident-generic",
+          pcl_tx_id: "tx-generic",
+          transaction_hash: txHash,
+          debug_trace_status: "completed",
+          transfer_from_calls: [
+            { token: zeroDecimalToken, source_owner: ownerOne, recipient, raw_amount: "1" },
+            { token: dai, source_owner: ownerTwo, recipient, raw_amount: "1000000000000000000" },
+          ],
+          events: [],
+          allowance_checks: [{ token: zeroDecimalToken, owner: ownerOne, spender: adopter, returned: "1" }],
+        },
+      ],
+    }),
+  );
+  await writeFile(
+    contextPath,
+    JSON.stringify({
+      addresses: [
+        { address: zeroDecimalToken, code_type: "contract", verified_source_available: true },
+        { address: dai, code_type: "contract", verified_source_available: true },
+      ],
+    }),
+  );
+  await writeFile(
+    decompilationPath,
+    JSON.stringify({ decompiler: "heimdall-rs", completed_count: 10, skipped_count: 0, error_count: 0 }),
+  );
+  await writeFile(
+    statePath,
+    JSON.stringify({
+      transaction: null,
+      receipt: null,
+      tokens: {
+        [zeroDecimalToken.toLowerCase()]: { symbol: "GOV", decimals: 0 },
+        [dai.toLowerCase()]: { symbol: "DAI", decimals: 18 },
+      },
+      reads: [
+        {
+          token: zeroDecimalToken,
+          source_owner: ownerOne,
+          balance_at_block: "1",
+          balance_latest: "",
+          allowance_latest: "",
+        },
+      ],
+    }),
+  );
+
+  const packetScriptPath = path.join(
+    process.cwd(),
+    "skills",
+    "pcl-invalidation-deep-dive",
+    "scripts",
+    "build_evidence_packet.py",
+  );
+  await execFileAsync("python3", [
+    packetScriptPath,
+    "--run-dir",
+    tempDir,
+    "--project",
+    "generic-vault",
+    "--project-id",
+    "project-generic",
+    "--chain-id",
+    "8453",
+    "--incident-json",
+    incidentPath,
+    "--trace-json",
+    tracePath,
+    "--normalized-json",
+    normalizedPath,
+    "--contract-context",
+    contextPath,
+    "--decompilation-manifest",
+    decompilationPath,
+    "--aux-file",
+    `state reads=${statePath}`,
+    "--pcl-tx-id",
+    "tx-generic",
+    "--out",
+    outPath,
+  ]);
+
+  const renderScriptPath = path.join(
+    process.cwd(),
+    "skills",
+    "pcl-invalidation-deep-dive",
+    "scripts",
+    "render_fast_report.py",
+  );
+  await execFileAsync("python3", [
+    renderScriptPath,
+    "--packet",
+    outPath,
+    "--run-dir",
+    tempDir,
+    "--out",
+    reportPath,
+  ]);
+
+  const report = await readFile(reportPath, "utf8");
+  assert.match(report, /PCL Invalidation Triage Report: generic-vault/);
+  assert.match(report, /Base \/ 8453/);
+  assert.match(report, /VaultBalanceAssertion/);
+  assert.match(report, /VaultRouter/);
+  assert.match(report, /1\.000000 GOV/);
+  assert.match(report, /1\.000000 DAI/);
+  assert.match(report, /Decompiler output is approximate/);
+  assert.doesNotMatch(report, /0x-settler/);
+  assert.doesNotMatch(report, /LineaSettler/);
+  assert.doesNotMatch(report, /AllowanceAssertion/);
+  assert.doesNotMatch(report, /1,000,000,000,000\.000000/);
 });

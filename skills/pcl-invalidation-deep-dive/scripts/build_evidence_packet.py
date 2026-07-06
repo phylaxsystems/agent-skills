@@ -70,15 +70,6 @@ def normalized_record(normalized: dict[str, Any] | None, tx_id: str | None) -> d
     return records[0]
 
 
-def token_amount(raw: str | None) -> str | None:
-    if raw is None:
-        return None
-    try:
-        return f"{int(raw) / 1_000_000:,.6f}"
-    except ValueError:
-        return None
-
-
 def decode_error_string(payload: str | None) -> str | None:
     if not payload or not payload.startswith("0x08c379a0"):
         return None
@@ -233,15 +224,12 @@ def build_packet(args: argparse.Namespace) -> str:
         ]
     )
     for transfer in transfers:
-        amount = token_amount(transfer.get("raw_amount"))
-        amount_text = f"{amount} token units assuming 6 decimals" if amount else transfer.get("raw_amount")
         lines.append(
             "- transferFrom: "
             f"token `{transfer.get('token')}`, "
             f"source `{transfer.get('source_owner')}`, "
             f"recipient `{transfer.get('recipient')}`, "
             f"raw `{transfer.get('raw_amount')}`"
-            + (f", normalized `{amount_text}`" if amount_text else "")
         )
     lines.append(f"- Decoded event count: `{len(events)}`")
     for event in events[:8]:
@@ -279,7 +267,7 @@ def build_packet(args: argparse.Namespace) -> str:
             "",
             "- Produce one production-style triage report from this packet.",
             "- Fast packet-only mode is the default: target under 90 seconds for one completed trace and keep the main report around 1,200-1,800 words.",
-            "- Prefer `scripts/render_fast_report.py --packet <this file> --run-dir <run-dir> --out <final_report.md>` for the first draft, then review briefly.",
+            "- Prefer `{baseDir}/scripts/render_fast_report.py --packet <this file> --run-dir <run-dir> --out <final_report.md>` for the first draft, then review briefly.",
             "- Do not refetch PCL list/detail/trace data unless a listed artifact is missing or inconsistent.",
             "- Read listed auxiliary state, receipt, price, and previous-transaction files before doing live RPC or explorer calls.",
             "- Do not do local Homebrew/formula/version checks, selector lookups, RPC calls, explorer calls, or raw-trace reads unless the packet is insufficient for a required claim.",

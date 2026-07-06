@@ -67,10 +67,10 @@ Identity keys:
 Before source collection or root-cause analysis, run the local requirements gate for the target chain:
 
 ```bash
-scripts/check_triage_requirements.py --chain-id <chain-id> --json
-scripts/check_triage_requirements.py --chain-id <chain-id> --no-api-keys
-scripts/check_triage_requirements.py --chain-id <chain-id> --no-api-keys --require-decompiler
-scripts/check_triage_requirements.py --chain-id <chain-id> --require-explorer
+{baseDir}/scripts/check_triage_requirements.py --chain-id <chain-id> --json
+{baseDir}/scripts/check_triage_requirements.py --chain-id <chain-id> --no-api-keys
+{baseDir}/scripts/check_triage_requirements.py --chain-id <chain-id> --no-api-keys --require-decompiler
+{baseDir}/scripts/check_triage_requirements.py --chain-id <chain-id> --require-explorer
 ```
 
 Use auto-discovery for normal triage. The JSON report includes `capability_selection`:
@@ -154,7 +154,7 @@ protocol_state_reads.json
 After the raw artifacts and targeted state reads exist, build a compact report-agent packet:
 
 ```bash
-scripts/build_evidence_packet.py \
+{baseDir}/scripts/build_evidence_packet.py \
   --run-dir <run-dir> \
   --project <project-slug> \
   --project-id <project-id> \
@@ -179,7 +179,7 @@ Fast packet-only report targets:
 
 - Finish one completed-trace report in under 90 seconds after reading the packet.
 - Prefer the deterministic renderer first:
-  `scripts/render_fast_report.py --packet evidence_packet.md --run-dir <run-dir> --out final_report.md`.
+  `{baseDir}/scripts/render_fast_report.py --packet evidence_packet.md --run-dir <run-dir> --out final_report.md`.
 - Use only packet and auxiliary files by default.
 - Treat missing non-critical checks as gaps instead of live-fetching them.
 - Keep the main report around 1,200-1,800 words.
@@ -225,7 +225,7 @@ For each transaction trace:
 - Strip ANSI before parsing.
 - If `transaction_trace_content` and `assertion_trace_content` are null, split combined `trace_content` on headings such as `Transaction Trace` and `Assertion Trace`.
 - Save trace JSON artifacts with both the incident id and PCL transaction id in the filename. Some trace endpoints return the PCL transaction object but not the incident id; the normalizer can infer full UUIDs from `trace_<incident-id>_<pcl-tx-id>.json` filenames.
-- Prefer running `scripts/normalize_pcl_trace.py --pretty trace_*.json > normalized_traces.json` before manual reasoning. It extracts non-delegatecall token calls, ERC20/ERC721/ERC1155/WETH/ERC4626 events, event-level deltas, non-fungible movements, and allowance checks into JSON. Treat it as a parsing aid, not a replacement for raw trace inspection.
+- Prefer running `{baseDir}/scripts/normalize_pcl_trace.py --pretty trace_*.json > normalized_traces.json` before manual reasoning. It extracts non-delegatecall token calls, ERC20/ERC721/ERC1155/WETH/ERC4626 events, event-level deltas, non-fungible movements, and allowance checks into JSON. Treat it as a parsing aid, not a replacement for raw trace inspection.
 - Count only non-delegatecall calls/events for direct attempted movement accounting.
 - Prefer emitted asset/protocol events and executed calls over raw calldata guesses.
 - Preserve raw assertion and transaction trace sections as artifacts, but combine them into one ordered `Full Improved Trace` in the final report.
@@ -316,7 +316,7 @@ Address collection:
 Recommended command:
 
 ```bash
-scripts/collect_contract_context.py \
+{baseDir}/scripts/collect_contract_context.py \
   --chain-id <chain-id> \
   --out-dir contract_context \
   trace_*.json
@@ -329,7 +329,7 @@ By default the helper refuses to run without JSON-RPC because `eth_getCode` is r
 Keyless source command when `capability_selection.mode=keyless-public` or when proving no-key operation:
 
 ```bash
-scripts/collect_contract_context.py \
+{baseDir}/scripts/collect_contract_context.py \
   --chain-id <chain-id> \
   --no-api-keys \
   --out-dir contract_context \
@@ -339,7 +339,7 @@ scripts/collect_contract_context.py \
 Keyed upgrade when keyless source leaves a material gap:
 
 ```bash
-scripts/collect_contract_context.py \
+{baseDir}/scripts/collect_contract_context.py \
   --chain-id <chain-id> \
   --out-dir contract_context_keyed \
   trace_*.json
@@ -348,7 +348,7 @@ scripts/collect_contract_context.py \
 For bytecode-backed decompiler targets, run Heimdall-rs:
 
 ```bash
-scripts/run_heimdall_decompiler.py \
+{baseDir}/scripts/run_heimdall_decompiler.py \
   contract_context/contract_context_manifest.json \
   --out-dir decompiled \
   --require-success
