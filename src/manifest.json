@@ -25,6 +25,13 @@
         "references/credible-sdk-assertion-testing.md"
       ]
     },
+    "deploy-credible-assertions": {
+      "basePath": "skills/deploy-credible-assertions",
+      "description": "Deploy a Credible Layer assertion project on-chain end-to-end with the pcl CLI, fully agentically. Use when asked to deploy assertions, create or activate an assertion release, set up pcl auth/RPC/wallet for deployment, set or transfer a protocol manager, or deactivate a release. Assumes assertions are already written (see write-protection-assertions for authoring).",
+      "files": [
+        "SKILL.md"
+      ]
+    },
     "designing-assertions": {
       "basePath": "skills/designing-assertions",
       "description": "Phylax Credible Layer assertions design. Designs high-signal invariants, classifies protocol protection surfaces, and maps them to V2 triggers before implementation.",

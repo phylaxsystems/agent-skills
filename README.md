@@ -77,6 +77,14 @@ Use when:
 - Storing and submitting assertions
 - Deploying via the dApp
 
+### deploy-credible-assertions
+Deploy an assertion project on-chain end-to-end with the `pcl` CLI, fully agentically (no browser wallet).
+
+Use when:
+- Deploying or activating an assertion release from the command line or CI
+- Setting up pcl auth, RPC endpoints, and wallet/keystore for deployment
+- Setting or transferring a protocol manager, or deactivating a release
+
 ### assertion-troubleshooting
 Diagnose non-triggering assertions and common failures.
 
