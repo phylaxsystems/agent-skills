@@ -4,6 +4,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const IGNORED_FILES = [".DS_Store", "Thumbs.db"];
+const IGNORED_DIRECTORIES = ["__pycache__"];
+const IGNORED_EXTENSIONS = [".pyc", ".pyo"];
+
+function shouldIgnoreFile(name) {
+  return IGNORED_FILES.includes(name) || IGNORED_EXTENSIONS.includes(path.extname(name));
+}
 
 async function collectFiles(rootDir, markerFiles, relativeDir = "") {
   const directory = relativeDir ? path.join(rootDir, ...relativeDir.split("/")) : rootDir;
@@ -14,11 +20,14 @@ async function collectFiles(rootDir, markerFiles, relativeDir = "") {
     const relativePath = relativeDir ? `${relativeDir}/${entry.name}` : entry.name;
 
     if (entry.isDirectory()) {
+      if (IGNORED_DIRECTORIES.includes(entry.name)) {
+        continue;
+      }
       files.push(...(await collectFiles(rootDir, markerFiles, relativePath)));
       continue;
     }
 
-    if (entry.isFile() && !IGNORED_FILES.includes(entry.name)) {
+    if (entry.isFile() && !shouldIgnoreFile(entry.name)) {
       files.push(relativePath);
     }
   }
@@ -198,7 +207,7 @@ async function scanAgentsDir(agentsDir) {
       continue;
     }
 
-    if (!entry.isFile() || IGNORED_FILES.includes(entry.name) || path.extname(entry.name) !== ".md") {
+    if (!entry.isFile() || shouldIgnoreFile(entry.name) || path.extname(entry.name) !== ".md") {
       continue;
     }
 

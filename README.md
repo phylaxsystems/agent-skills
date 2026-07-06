@@ -77,6 +77,15 @@ Use when:
 - Storing and submitting assertions
 - Deploying via the dApp
 
+
+### pcl-invalidation-deep-dive
+Local production-style triage for PCL/Credible Layer invalidations, blocked exploit attempts, failed traces, and protected-value estimates.
+
+Use when:
+- A user gets a new invalidation and needs to know what the dropped transaction attempted
+- Estimating actual loss, unique protected value, repeated blocked volume, or failed-trace gaps
+- Investigating blocked exploit attempts, false positives, failed traces, allowance drains, NFT/operator approval issues, bridge/router/vault flows, privileged calls, or protocol-state invalidations
+
 ### deploy-credible-assertions
 Deploy an assertion project on-chain end-to-end with the `pcl` CLI, fully agentically (no browser wallet).
 
@@ -84,6 +93,7 @@ Use when:
 - Deploying or activating an assertion release from the command line or CI
 - Setting up pcl auth, RPC endpoints, and wallet/keystore for deployment
 - Setting or transferring a protocol manager, or deactivating a release
+
 
 ### assertion-troubleshooting
 Diagnose non-triggering assertions and common failures.

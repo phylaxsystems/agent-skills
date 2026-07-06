@@ -1,0 +1,4 @@
+interface:
+  display_name: "PCL Invalidation Deep Dive"
+  short_description: "Triage PCL invalidations across EVM protocols"
+  default_prompt: "Use $pcl-invalidation-deep-dive to investigate a PCL invalidation and produce a production-style triage report with transaction evidence, assertion reasoning, source/decompiler context, protected value or state, verdict, and next action."
